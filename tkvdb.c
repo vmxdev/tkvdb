@@ -3,19 +3,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum TKVDB_RES
+#include "tkvdb.h"
+
+struct tkvdb_params
 {
-	TKVDB_OK = 0,
-	TKVDB_ENOMEM
+	size_t mmap_len;
+	/* TODO: partitioning */
 };
 
-enum TKVDB_MNTYPE
+/* database */
+struct tkvdb
 {
-	TKVDB_KEY,
-	TKVDB_KEYVAL,
-	TKVDB_REPLACED
+	/* database file handle */
+	int fd;
+
+	/* database params */
+	tkvdb_params params;
 };
 
+/* node in memory */
 typedef struct tkvdb_memnode
 {
 	enum TKVDB_MNTYPE type;
@@ -23,33 +29,40 @@ typedef struct tkvdb_memnode
 	size_t val_size;
 
 	struct tkvdb_memnode *next[256];
-	off_t fnext[256];
+	uint64_t fnext[256];
 
-	unsigned char prefix_and_val[1];
+	unsigned char prefix_val_meta[1];
 } tkvdb_memnode;
 
-typedef struct tkvdb_tr
+/* transaction in memory */
+struct tkvdb_memtr
 {
+	tkvdb *db;
 	tkvdb_memnode *root;
-} tkvdb_tr;
+};
 
+/* index of subnode in node */
 typedef struct tkvdb_nodepos
 {
-	tkvdb_memnode *n;
+	tkvdb_memnode *node;
 	int off;
 } tkvdb_nodepos;
 
-typedef struct tkvdb_cursor
+/* database cursor */
+struct tkvdb_cursor
 {
-	size_t stacksize;
+	size_t stack_size;
 	tkvdb_nodepos *stack;
 
 	size_t prefix_size;
 	unsigned char *prefix;
-} tkvdb_cursor;
+};
 
+
+/* allocate node and append prefix and value */
 tkvdb_memnode *
-tkvdb_node_alloc(enum TKVDB_MNTYPE type, size_t prefix_size, const void *prefix, size_t vlen, const void *val)
+tkvdb_node_alloc(enum TKVDB_MNTYPE type, size_t prefix_size,
+	const void *prefix, size_t vlen, const void *val)
 {
 	tkvdb_memnode *r;
 
@@ -62,14 +75,14 @@ tkvdb_node_alloc(enum TKVDB_MNTYPE type, size_t prefix_size, const void *prefix,
 	r->prefix_size = prefix_size;
 	r->val_size = vlen;
 	if (r->prefix_size > 0) {
-		memcpy(r->prefix_and_val, prefix, r->prefix_size);
+		memcpy(r->prefix_val_meta, prefix, r->prefix_size);
 	}
 	if (r->val_size > 0) {
-		memcpy(r->prefix_and_val + r->prefix_size, val, r->val_size);
+		memcpy(r->prefix_val_meta + r->prefix_size, val, r->val_size);
 	}
 
 	memset(r->next, 0, sizeof(tkvdb_memnode *) * 256);
-	memset(r->fnext, 0, sizeof(off_t) * 256);
+	memset(r->fnext, 0, sizeof(uint64_t) * 256);
 
 	return r;
 }
@@ -78,11 +91,13 @@ static void
 clone_subnodes(tkvdb_memnode *dst, tkvdb_memnode *src)
 {
 	memcpy(dst->next,  src->next, sizeof(tkvdb_memnode *) * 256);
-	memcpy(dst->fnext, src->fnext, sizeof(off_t) * 256);
+	memcpy(dst->fnext, src->fnext, sizeof(uint64_t) * 256);
 }
 
-int
-tkvdb_put(tkvdb_tr *tr, const void *key, size_t klen, const void *val, size_t vlen)
+/* add key-value pair to memory transaction */
+TKVDB_RES
+tkvdb_put(tkvdb_memtr *tr,
+	const void *key, size_t klen, const void *val, size_t vlen)
 {
 	const unsigned char *sym;  /* pointer to current symbol in key */
 	tkvdb_memnode *curr;       /* current node */
@@ -90,7 +105,8 @@ tkvdb_put(tkvdb_tr *tr, const void *key, size_t klen, const void *val, size_t vl
 
 	/* new root */
 	if (tr->root == NULL) {
-		tr->root = tkvdb_node_alloc(TKVDB_KEYVAL, klen, key, vlen, val);
+		tr->root = tkvdb_node_alloc(TKVDB_KEYVAL, klen, key,
+			vlen, val);
 		if (!tr->root) {
 			return TKVDB_ENOMEM;
 		}
@@ -110,19 +126,30 @@ next_node:
 
 next_byte:
 
-	/* end of key */
+/* end of key
+  ere we have two cases:
+  [p][r][e][f][i][x] - prefix
+  [p][r][e] - new key
+
+  or exact match:
+  [p][r][e][f][i][x] - prefix
+  [p][r][e][f][i][x] - new key
+*/
 	if (sym >= ((unsigned char *)key + klen)) {
 		tkvdb_memnode *newroot, *subnode_rest;
 
 		if (pi == curr->prefix_size) {
 			/* exact match */
 			if ((curr->val_size == vlen) && (vlen != 0)) {
-				/* same value size, so copy new value and return */
-				memcpy(curr->prefix_and_val + curr->prefix_size, val, vlen);
+				/* same value size, so copy new value and
+					return */
+				memcpy(curr->prefix_val_meta
+					+ curr->prefix_size, val, vlen);
 				return TKVDB_OK;
 			}
 
-			newroot = tkvdb_node_alloc(TKVDB_KEY, pi, curr->prefix_and_val, vlen, val);
+			newroot = tkvdb_node_alloc(TKVDB_KEYVAL,
+				pi, curr->prefix_val_meta, vlen, val);
 			if (!newroot) return TKVDB_ENOMEM;
 
 			clone_subnodes(newroot, curr);
@@ -133,12 +160,24 @@ next_byte:
 			return TKVDB_OK;
 		}
 
-		/* split node with prefix */
-		newroot = tkvdb_node_alloc(TKVDB_KEY, pi, curr->prefix_and_val, vlen, val);
+/* split node with prefix
+  [p][r][e][f][i][x] - prefix
+  [p][r][e] - new key
+
+  becomes
+  [p][r][e] - new root
+  next['f'] => [i][x] - tail
+*/
+		newroot = tkvdb_node_alloc(TKVDB_KEYVAL, pi,
+			curr->prefix_val_meta,
+			vlen, val);
 		if (!newroot) return TKVDB_ENOMEM;
 
-		subnode_rest = tkvdb_node_alloc(TKVDB_KEYVAL, curr->prefix_size - pi - 1, curr->prefix_and_val + pi + 1,
-			curr->val_size, curr->prefix_and_val + curr->prefix_size);
+		subnode_rest = tkvdb_node_alloc(curr->type,
+			curr->prefix_size - pi - 1,
+			curr->prefix_val_meta + pi + 1,
+			curr->val_size,
+			curr->prefix_val_meta + curr->prefix_size);
 
 		if (!subnode_rest) {
 			free(newroot);
@@ -146,13 +185,20 @@ next_byte:
 		}
 		clone_subnodes(subnode_rest, curr);
 
-		newroot->next[curr->prefix_and_val[pi]] = subnode_rest;
+		newroot->next[curr->prefix_val_meta[pi]] = subnode_rest;
 		curr->type = TKVDB_REPLACED;
 		curr->next[0] = newroot;
 		return TKVDB_OK;
 	}
 
-	/* end of prefix */
+/* end of prefix
+  [p][r][e][f][i][x] - old prefix
+  [p][r][e][f][i][x][n][e][w]- new prefix
+
+  so we hold old node and change only pointer to next
+  [p][r][e][f][i][x]
+  next['n'] => [e][w] - tail
+*/
 	if (pi >= curr->prefix_size) {
 		if (curr->next[*sym] != NULL) {
 			/* continue with next node */
@@ -163,7 +209,9 @@ next_byte:
 			tkvdb_memnode *tmp;
 
 			/* allocate tail */
-			tmp = tkvdb_node_alloc(TKVDB_KEYVAL, klen - (sym - (unsigned char *)key) - 1, sym + 1,
+			tmp = tkvdb_node_alloc(TKVDB_KEYVAL,
+				klen - (sym - (unsigned char *)key) - 1,
+				sym + 1,
 				vlen, val);
 			if (!tmp) return TKVDB_ENOMEM;
 
@@ -172,21 +220,33 @@ next_byte:
 		}
 	}
 
-	/* node prefix don't match with corresponding part of key */
-	if (curr->prefix_and_val[pi] != *sym) {
-		tkvdb_memnode *newroot, *subnode_rest, *subnode_key;
-/*
-		printf("splitting key at %lu, '%c'(%d) != '%c'(%d)\n",
-			pi, curr->prefix_and_val[pi], curr->prefix_and_val[pi], *sym, *sym);
+/* node prefix don't match with corresponding part of key
+  [p][r][e][f][i][x] - old prefix
+  [p][r][e][p][a][r][e]- new prefix
+
+  [p][r][e] - new root
+  next['f'] => [i][x] - tail from old prefix
+  next['p'] => [a][r][e] - tail from new prefix
 */
+	if (curr->prefix_val_meta[pi] != *sym) {
+		tkvdb_memnode *newroot, *subnode_rest, *subnode_key;
+#ifdef TRACE
+		printf("splitting key at %lu, '%c'(%d) != '%c'(%d)\n",
+			pi, curr->prefix_and_val[pi], curr->prefix_and_val[pi],
+			*sym, *sym);
+#endif
 
 		/* split current node into 3 subnodes */
-		newroot = tkvdb_node_alloc(TKVDB_KEYVAL, pi, curr->prefix_and_val, 0, NULL);
+		newroot = tkvdb_node_alloc(TKVDB_KEY, pi,
+			curr->prefix_val_meta, 0, NULL);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		/* rest of prefix (skip current symbol) */
-		subnode_rest = tkvdb_node_alloc(TKVDB_KEYVAL, curr->prefix_size - pi - 1, curr->prefix_and_val + pi + 1,
-			curr->val_size, curr->prefix_and_val + curr->prefix_size);
+		subnode_rest = tkvdb_node_alloc(curr->type,
+			curr->prefix_size - pi - 1,
+			curr->prefix_val_meta + pi + 1,
+			curr->val_size,
+			curr->prefix_val_meta + curr->prefix_size);
 		if (!subnode_rest) {
 			free(newroot);
 			return TKVDB_ENOMEM;
@@ -194,7 +254,9 @@ next_byte:
 		clone_subnodes(subnode_rest, curr);
 
 		/* rest of key */
-		subnode_key = tkvdb_node_alloc(TKVDB_KEYVAL, klen - (sym - (unsigned char *)key) - 1, sym + 1,
+		subnode_key = tkvdb_node_alloc(TKVDB_KEYVAL,
+			klen - (sym - (unsigned char *)key) - 1,
+			sym + 1,
 			vlen, val);
 		if (!subnode_key) {
 			free(subnode_rest);
@@ -202,7 +264,7 @@ next_byte:
 			return TKVDB_ENOMEM;
 		}
 
-		newroot->next[curr->prefix_and_val[pi]] = subnode_rest;
+		newroot->next[curr->prefix_val_meta[pi]] = subnode_rest;
 		newroot->next[*sym] = subnode_key;
 
 		curr->type = TKVDB_REPLACED;
@@ -219,19 +281,26 @@ next_byte:
 
 /* cursors */
 
-int
-tkvdb_cursor_init(tkvdb_cursor *c)
+tkvdb_cursor *
+tkvdb_cursor_new()
 {
-	c->stacksize = 0;
+	tkvdb_cursor *c;
+
+	c = malloc(sizeof(tkvdb_cursor));
+	if (!c) {
+		return NULL;
+	}
+
+	c->stack_size = 0;
 	c->stack = NULL;
 
 	c->prefix_size = 0;
 	c->prefix = NULL;
 
-	return TKVDB_OK;
+	return c;
 }
 
-int
+void
 tkvdb_cursor_close(tkvdb_cursor *c)
 {
 	if (c->prefix) {
@@ -239,13 +308,35 @@ tkvdb_cursor_close(tkvdb_cursor *c)
 		c->prefix = NULL;
 	}
 	c->prefix_size = 0;
-	return TKVDB_OK;
+
+	if (c->stack) {
+		free(c->stack);
+		c->stack = NULL;
+	}
+	c->stack_size = 0;
 }
 
 static int
-tkvdb_cursor_expand_prefix(tkvdb_cursor *c, size_t n)
+tkvdb_cursor_expand_prefix(tkvdb_cursor *c, int n)
 {
 	unsigned char *tmp_pfx;
+
+	if (n == 0) {
+		/* underflow */
+		printf("underflow?\n");
+		if (c->prefix) {
+			free(c->prefix);
+			c->prefix = NULL;
+		}
+		return /*TKVDB_ENOMEM*/TKVDB_OK;
+	}
+
+	/* empty key is ok */
+	if ((c->prefix_size + n) == 0) {
+		free(c->prefix);
+		c->prefix = NULL;
+		return TKVDB_OK;
+	}
 
 	tmp_pfx = realloc(c->prefix, c->prefix_size + n);
 	if (!tmp_pfx) {
@@ -258,139 +349,212 @@ tkvdb_cursor_expand_prefix(tkvdb_cursor *c, size_t n)
 	return TKVDB_OK;
 }
 
-int
-tkvdb_first(tkvdb_cursor *c, tkvdb_tr *tr)
+/* add (push) node */
+static int
+tkvdb_cursor_push(tkvdb_cursor *c, tkvdb_memnode *node, int off)
 {
-	tkvdb_memnode *curr;
+	tkvdb_nodepos *tmp_stack;
+
+	tmp_stack = realloc(c->stack,
+		(c->stack_size + 1) * sizeof(tkvdb_nodepos));
+	if (!tmp_stack) {
+		free(c->stack);
+		c->stack = NULL;
+		return TKVDB_ENOMEM;
+	}
+	c->stack = tmp_stack;
+	c->stack[c->stack_size].node = node;
+	c->stack[c->stack_size].off = off;
+	c->stack_size++;
+
+	return TKVDB_OK;
+}
+
+/* pop node */
+static int
+tkvdb_cursor_pop(tkvdb_cursor *c)
+{
+	tkvdb_nodepos *tmp_stack;
 	int r;
+	tkvdb_memnode *node;
 
-	tkvdb_cursor_init(c);
+	if (c->stack_size <= 1) {
+		printf("stack underflow!\n");
+		return TKVDB_EMPTY;
+	}
 
-	curr = tr->root;
+	node = c->stack[c->stack_size - 1].node;
+
+	/* erase prefix */
+	if ((r = tkvdb_cursor_expand_prefix(c, -(node->prefix_size + 1)))
+		!= TKVDB_OK) {
+		return r;
+	}
+	c->prefix_size -= node->prefix_size + 1;
+
+	tmp_stack = realloc(c->stack,
+		(c->stack_size - 1) * sizeof(tkvdb_nodepos));
+	if (!tmp_stack) {
+		free(c->stack);
+		c->stack = NULL;
+		return TKVDB_ENOMEM;
+	}
+	c->stack = tmp_stack;
+	c->stack_size--;
+
+	return TKVDB_OK;
+}
+
+
+#define TKVDB_EXEC(FUNC) \
+do {\
+	int r = FUNC;\
+	if (r != TKVDB_OK) {\
+		return r;\
+	}\
+} while (0)
+
+#define TKVDB_SKIP_RNODES(NODE) \
+	while (NODE->type == TKVDB_REPLACED) { \
+		NODE = NODE->next[0]; \
+	}
+
+static int
+tkvdb_smallest(tkvdb_cursor *c, tkvdb_memnode *node)
+{
+	int off = 0;
+	tkvdb_memnode *next;
 
 	for (;;) {
-		unsigned int i;
-		tkvdb_memnode *next;
+		/* skip replaced nodes */
+		TKVDB_SKIP_RNODES(node);
 
-		if (curr->type == TKVDB_REPLACED) {
-			curr = curr->next[0];
-			continue;
-		}
+		/* if node has prefix, append it to cursor */
+		if (node->prefix_size > 0) {
+			TKVDB_EXEC( tkvdb_cursor_expand_prefix(c,
+				node->prefix_size) );
 
-		if (curr->prefix_size) {
-			if ((r = tkvdb_cursor_expand_prefix(c, curr->prefix_size)) != TKVDB_OK) {
-				/* error */
-				return r;
-			}
 			/* append prefix */
-			memcpy(c->prefix + c->prefix_size, curr->prefix_and_val, curr->prefix_size);
-			c->prefix_size += curr->prefix_size;
-			{
-				char buf[100];
-				memcpy(buf, c->prefix, curr->prefix_size);
-				buf[curr->prefix_size] = '\0';
-				printf("Prefix: (%lu) %s[%s]\n", curr->prefix_size, c->prefix, buf);
-			}
+			memcpy(c->prefix + c->prefix_size,
+				node->prefix_val_meta,
+				node->prefix_size);
+			c->prefix_size += node->prefix_size;
 		}
 
+		/* stop search at key-value node */
+		if (node->type == TKVDB_KEYVAL) {
+			TKVDB_EXEC( tkvdb_cursor_push(c, node, off) );
+			break;
+		}
+
+		/* if current node is key without value, search in subnodes */
 		next = NULL;
-		for (i=0; i<256; i++) {
-			if (curr->next[i]) {
-				next = curr->next[i];
+		for (off=0; off<256; off++) {
+			if (node->next[off]) {
+				/* found next subnode */
+				next = node->next[off];
 				break;
 			}
 		}
 
-		if (next) {
-			if ((r = tkvdb_cursor_expand_prefix(c, 1)) != TKVDB_OK) {
-				return r;
-			}
-			c->prefix[c->prefix_size] = i;
-			c->prefix_size++;
-			curr = next;
-		} else {
-			/* no subnodes */
-			break;
+		if (!next) {
+			/* key node and no subnodes, return error */
+			return TKVDB_CORRUPTED;
 		}
+
+		TKVDB_EXEC( tkvdb_cursor_expand_prefix(c, 1) );
+
+		c->prefix[c->prefix_size] = off;
+		c->prefix_size++;
+
+		/* push node */
+		TKVDB_EXEC( tkvdb_cursor_push(c, node, off) );
+
+		node = next;
 	}
 
 	return TKVDB_OK;
 }
 
-void
-tkvdb_dump(tkvdb_tr *tr)
+int
+tkvdb_first(tkvdb_cursor *c, tkvdb_memtr *tr)
 {
-	tkvdb_cursor c;
 	int r;
 
-	r = tkvdb_first(&c, tr);
-	if (r != TKVDB_OK) {
-		return;
-	}
-	printf("First prefix: (%lu) %s\n", c.prefix_size, c.prefix);
+	r = tkvdb_smallest(c, tr->root);
+	return r;
 }
-
-static void
-print_indent(int indent)
-{
-	int i;
-
-	for (i=0; i<indent; i++) {
-		fputc(' ', stdout);
-	}
-}
-
-static void
-tkvdb_dump_recursive(tkvdb_memnode *curr, int indent)
-{
-	int i;
-
-	while (curr->type == TKVDB_REPLACED) {
-		curr = curr->next[0];
-	}
-
-	{
-		char buf[100];
-		memcpy(buf, curr->prefix_and_val, curr->prefix_size);
-		buf[curr->prefix_size] = '\0';
-		print_indent(indent);
-		printf("Prefix: (len %lu) '%s'\n", curr->prefix_size, buf);
-		if (curr->val_size > 0) {
-			memcpy(buf, curr->prefix_and_val + curr->prefix_size, curr->val_size);
-			buf[curr->val_size] = '\0';
-			print_indent(indent);
-			printf("Val: (len %lu) '%s'\n", curr->val_size, buf);
-		}
-	}
-
-	print_indent(indent);
-	printf("Subnodes:\n\n");
-	for (i=0; i<256; i++) {
-		if (curr->next[i]) {
-			print_indent(indent + 1);
-			printf("Symbol '%c'[%d]\n", i, i);
-			tkvdb_dump_recursive(curr->next[i], indent + 1);
-		}
-	}
-}
-
 
 int
-main()
+tkvdb_next(tkvdb_cursor *c)
 {
-	tkvdb_tr tr;
-	int i;
-	tr.root = NULL;
+	int r, *off;
+	tkvdb_memnode *node, *next;
 
-	for (i=0; i<256; i++) {
-		char buf[100];
-
-		snprintf(buf, sizeof(buf),"%02x", i);
-		tkvdb_put(&tr, buf, 2, buf, 2);
+next_node:
+	if (c->stack_size < 1) {
+		printf("???\n");
+		return TKVDB_EMPTY;
 	}
 
-	tkvdb_dump_recursive(tr.root, 0);
+	/* get node from stack's top */
+	node = c->stack[c->stack_size - 1].node;
+	off = &(c->stack[c->stack_size - 1].off);
+	(*off)++;
 
-	return EXIT_SUCCESS;
+	/* search in subnodes */
+	next = NULL;
+	for (; *off<256; (*off)++) {
+		if (node->next[*off]) {
+			next = node->next[*off];
+			break;
+		}
+	}
+
+	/* found */
+	if (next) {
+		/* expand cursor key */
+		TKVDB_EXEC( tkvdb_cursor_expand_prefix(c, 1) );
+		c->prefix[c->prefix_size] = *off;
+		c->prefix_size++;
+
+		r = tkvdb_smallest(c, next);
+		return r;
+	}
+
+	/* pop */
+	TKVDB_EXEC( tkvdb_cursor_pop(c) );
+
+	goto next_node;
+
+	return TKVDB_OK;
+}
+
+void *
+tkvdb_cursor_key(tkvdb_cursor *c)
+{
+	return c->prefix;
+}
+
+size_t
+tkvdb_cursor_keysize(tkvdb_cursor *c)
+{
+	return c->prefix_size;
+}
+
+TKVDB_RES
+tkvdb_begin(tkvdb *db, tkvdb_memtr **tr)
+{
+	/* requested new transaction */
+	if (!(*tr)) {
+		*tr = malloc(sizeof (tkvdb_memtr));
+		if (*tr == NULL) {
+			return TKVDB_ENOMEM;
+		}
+	}
+
+	(*tr)->db = db;
+
+	return TKVDB_OK;
 }
 
