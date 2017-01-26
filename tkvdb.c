@@ -2,13 +2,23 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "tkvdb.h"
 
 struct tkvdb_params
 {
-	size_t mmap_len;
-	/* TODO: partitioning */
+	size_t mmap_len; /* length of database file mmaped region */
+
+	size_t tr_len;   /* transaction max size */
+
+	int flags;       /* db file flags (as passed to open()) */
+	mode_t mode;     /* db file mode */
+
+	/* TODO: partitioning ? */
 };
 
 /* database */
@@ -27,6 +37,7 @@ typedef struct tkvdb_memnode
 	enum TKVDB_MNTYPE type;
 	size_t prefix_size;
 	size_t val_size;
+	size_t meta_size;
 
 	struct tkvdb_memnode *next[256];
 	uint64_t fnext[256];
@@ -35,7 +46,7 @@ typedef struct tkvdb_memnode
 } tkvdb_memnode;
 
 /* transaction in memory */
-struct tkvdb_memtr
+struct tkvdb_tr
 {
 	tkvdb *db;
 	tkvdb_memnode *root;
@@ -58,6 +69,51 @@ struct tkvdb_cursor
 	unsigned char *prefix;
 };
 
+/* open database file */
+tkvdb *
+tkvdb_open(const char *path, tkvdb_params *user_params)
+{
+	tkvdb *db;
+	tkvdb_params params;
+
+	db = malloc(sizeof(tkvdb));
+	if (!db) {
+		goto fail;
+	}
+
+	if (user_params) {
+		params = *user_params;
+	} else {
+		params.flags = O_RDWR | O_CREAT;
+		params.mode = S_IRUSR | S_IWUSR;
+	}
+
+	db->fd = open(path, params.flags, params.mode);
+	if (db->fd < 0) {
+		goto fail_free;
+	}
+
+	return db;
+
+fail_free:
+	free(db);
+fail:
+	return NULL;
+}
+
+/* close database and free data */
+TKVDB_RES
+tkvdb_close(tkvdb *db)
+{
+	TKVDB_RES res = TKVDB_OK;
+
+	if (close(db->fd) < 0) {
+		res = TKVDB_ERROR;
+	}
+
+	free(db);
+	return res;
+}
 
 /* allocate node and append prefix and value */
 tkvdb_memnode *
@@ -96,7 +152,7 @@ clone_subnodes(tkvdb_memnode *dst, tkvdb_memnode *src)
 
 /* add key-value pair to memory transaction */
 TKVDB_RES
-tkvdb_put(tkvdb_memtr *tr,
+tkvdb_put(tkvdb_tr *tr,
 	const void *key, size_t klen, const void *val, size_t vlen)
 {
 	const unsigned char *sym;  /* pointer to current symbol in key */
@@ -282,7 +338,7 @@ next_byte:
 /* cursors */
 
 tkvdb_cursor *
-tkvdb_cursor_new()
+tkvdb_cursor_create()
 {
 	tkvdb_cursor *c;
 
@@ -300,8 +356,8 @@ tkvdb_cursor_new()
 	return c;
 }
 
-void
-tkvdb_cursor_close(tkvdb_cursor *c)
+TKVDB_RES
+tkvdb_cursor_free(tkvdb_cursor *c)
 {
 	if (c->prefix) {
 		free(c->prefix);
@@ -314,6 +370,8 @@ tkvdb_cursor_close(tkvdb_cursor *c)
 		c->stack = NULL;
 	}
 	c->stack_size = 0;
+
+	return TKVDB_OK;
 }
 
 static int
@@ -476,8 +534,8 @@ tkvdb_smallest(tkvdb_cursor *c, tkvdb_memnode *node)
 	return TKVDB_OK;
 }
 
-int
-tkvdb_first(tkvdb_cursor *c, tkvdb_memtr *tr)
+TKVDB_RES
+tkvdb_first(tkvdb_cursor *c, tkvdb_tr *tr)
 {
 	int r;
 
@@ -485,7 +543,7 @@ tkvdb_first(tkvdb_cursor *c, tkvdb_memtr *tr)
 	return r;
 }
 
-int
+TKVDB_RES
 tkvdb_next(tkvdb_cursor *c)
 {
 	int r, *off;
@@ -542,19 +600,26 @@ tkvdb_cursor_keysize(tkvdb_cursor *c)
 	return c->prefix_size;
 }
 
-TKVDB_RES
-tkvdb_begin(tkvdb *db, tkvdb_memtr **tr)
+tkvdb_tr *
+tkvdb_tr_create(tkvdb *db)
 {
-	/* requested new transaction */
-	if (!(*tr)) {
-		*tr = malloc(sizeof (tkvdb_memtr));
-		if (*tr == NULL) {
-			return TKVDB_ENOMEM;
-		}
+	tkvdb_tr *tr;
+
+	tr = malloc(sizeof (tkvdb_tr));
+	if (!tr) {
+		return NULL;
 	}
 
-	(*tr)->db = db;
+	tr->db = db;
+	return tr;
 
+}
+
+TKVDB_RES
+tkvdb_begin(tkvdb_tr *tr)
+{
+	(void)tr;
+	/* FIXME: ? */
 	return TKVDB_OK;
 }
 

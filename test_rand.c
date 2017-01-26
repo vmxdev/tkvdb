@@ -6,12 +6,12 @@
 #include "tkvdb.h"
 
 void
-tkvdb_dump(tkvdb_memtr *tr)
+tkvdb_dump(tkvdb_tr *tr)
 {
 	tkvdb_cursor *c;
 	int r;
 
-	c = tkvdb_cursor_new();
+	c = tkvdb_cursor_create();
 
 	r = tkvdb_first(c, tr);
 	if (r != TKVDB_OK) {
@@ -109,11 +109,12 @@ cmp(const void *a, const void *b)
 int
 main()
 {
-	tkvdb_memtr *tr = NULL;
+	tkvdb_tr *tr = NULL;
 	int i;
 	char keys[N * 6];
 
-	tkvdb_begin(NULL, &tr);
+	tr = tkvdb_tr_create(NULL);
+	tkvdb_begin(tr);
 
 	for (i=0; i<N; i++) {
 		char buf[100];
