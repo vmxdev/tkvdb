@@ -6,7 +6,7 @@
 #include "tkvdb.h"
 
 void
-tkvdb_dump(tkvdb_tr *tr)
+dump(tkvdb_tr *tr)
 {
 	tkvdb_cursor *c;
 	int r;
@@ -109,11 +109,15 @@ cmp(const void *a, const void *b)
 int
 main()
 {
-	tkvdb_tr *tr = NULL;
+	tkvdb *db;
+	tkvdb_tr *tr;
+
 	int i;
 	char keys[N * 6];
 
-	tr = tkvdb_tr_create(NULL);
+	db = tkvdb_open("data.tkv", NULL);
+	tr = tkvdb_tr_create(db);
+
 	tkvdb_begin(tr);
 
 	for (i=0; i<N; i++) {
@@ -126,16 +130,21 @@ main()
 		}
 		buf[size] = '\0';
 		memcpy(keys + i*6, buf, size + 1);
-		tkvdb_put(tr, buf, size, buf, 2);
+		tkvdb_put(tr, buf, size, buf, size);
 	}
 
 	/*tkvdb_dump_recursive(tr.root, 0);*/
-	tkvdb_dump(tr);
+	dump(tr);
+
+	tkvdb_commit(tr);
 
 	qsort(keys, N, 6, &cmp);
 	for (i=0; i<N; i++) {
 		printf("key: %s\n", keys + i*6);
 	}
+
+	tkvdb_tr_free(tr);
+	tkvdb_close(db);
 
 	return EXIT_SUCCESS;
 }
