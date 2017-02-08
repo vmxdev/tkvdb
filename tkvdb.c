@@ -786,8 +786,8 @@ tkvdb_node_to_buf(tkvdb *db, tkvdb_memnode *node, uint64_t transaction_off)
 
 	disknode->size = node->disk_size;
 	disknode->type = node->type;
-
 	disknode->nsubnodes = node->nsubnodes;
+	disknode->prefix_size = node->prefix_size;
 
 	ptr = disknode->data;
 
@@ -873,8 +873,12 @@ tkvdb_commit(tkvdb_tr *tr)
 	tkvdb_visit_helper *stack = NULL;
 
 	struct tkvdb_header db_header;
-	/* file offsets */
-	uint64_t transaction_off, node_off;
+	/* offset of whole transaction in file */
+	uint64_t transaction_off;
+	/* offset of next node in file */
+	uint64_t node_off;
+	/* size of last accessed node, will be added to node_off */
+	uint64_t last_node_size;
 	struct stat st;
 
 	tkvdb_memnode *node;
@@ -921,6 +925,8 @@ tkvdb_commit(tkvdb_tr *tr)
 	/* first node offset */
 	node_off = transaction_off;
 
+	last_node_size = 0;
+
 	/* now iterate through nodes in transaction */
 	node = tr->root;
 
@@ -933,6 +939,7 @@ tkvdb_commit(tkvdb_tr *tr)
 			tkvdb_node_calc_disksize(node);
 
 			node->disk_off = node_off;
+			last_node_size = node->disk_size;
 		}
 
 		next = NULL;
@@ -945,8 +952,11 @@ tkvdb_commit(tkvdb_tr *tr)
 		}
 
 		if (next) {
+			TKVDB_SKIP_RNODES(next);
+
 			node->fnext[off] = node_off;
-			node_off += node->disk_size;
+			/*node_off += node->disk_size;*/
+			node_off += last_node_size;
 
 			/* push node and position to stack */
 			stack = realloc(stack, sizeof(tkvdb_visit_helper)
@@ -961,6 +971,9 @@ tkvdb_commit(tkvdb_tr *tr)
 		} else {
 			/* no more subnodes, copy node to buffer */
 			r = tkvdb_node_to_buf(tr->db, node, transaction_off);
+			if (r != TKVDB_OK) {
+				goto fail_unlock;
+			}
 
 			/* pop */
 			if (stack_depth == 0) {
@@ -980,10 +993,16 @@ tkvdb_commit(tkvdb_tr *tr)
 	}
 
 	/* write transaction to disk */
-	/* XXX: check! */
-	lseek(tr->db->fd, transaction_off, SEEK_SET);
-	write(tr->db->fd, tr->db->write_buf, node_off);
+	if (lseek(tr->db->fd, transaction_off, SEEK_SET)
+		!= (off_t)transaction_off) {
+		return TKVDB_ERROR;
+	}
+	if (write(tr->db->fd, tr->db->write_buf, node_off - transaction_off)
+		!= (ssize_t)(node_off - transaction_off)) {
+		return TKVDB_ERROR;
+	}
 
+fail_unlock:
 	/* unlock database */
 	db_header.locked = 0;
 	db_header.root = transaction_off;
