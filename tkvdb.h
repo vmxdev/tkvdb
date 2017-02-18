@@ -13,6 +13,7 @@ typedef enum TKVDB_RES
 {
 	TKVDB_OK = 0,
 	TKVDB_ERROR,
+	TKVDB_IO_ERROR,
 	TKVDB_LOCKED,
 	TKVDB_EMPTY,
 	TKVDB_ENOMEM,
@@ -44,16 +45,15 @@ TKVDB_RES tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen,
 	const void **val, size_t *vlen);
 
 /* cursors manipulations */
-tkvdb_cursor *tkvdb_cursor_create();
+tkvdb_cursor *tkvdb_cursor_create(tkvdb_tr *tr);
 TKVDB_RES tkvdb_cursor_free(tkvdb_cursor *c);
 
 void *tkvdb_cursor_key(tkvdb_cursor *c);
 size_t tkvdb_cursor_keysize(tkvdb_cursor *c);
 
-TKVDB_RES tkvdb_seek(tkvdb_cursor *c, tkvdb_tr *tr,
-	const void *key, size_t klen);
-TKVDB_RES tkvdb_first(tkvdb_cursor *c, tkvdb_tr *tr);
-TKVDB_RES tkvdb_last(tkvdb_cursor *c, tkvdb_tr *tr);
+TKVDB_RES tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen);
+TKVDB_RES tkvdb_first(tkvdb_cursor *c);
+TKVDB_RES tkvdb_last(tkvdb_cursor *c);
 
 TKVDB_RES tkvdb_next(tkvdb_cursor *c);
 TKVDB_RES tkvdb_prev(tkvdb_cursor *c);
