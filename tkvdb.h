@@ -32,6 +32,8 @@ TKVDB_RES tkvdb_close(tkvdb *db);
 
 /* in-memory transaction */
 tkvdb_tr *tkvdb_tr_create(tkvdb *db);
+/* create transaction with custom memory allocation parameters */
+tkvdb_tr *tkvdb_tr_create_m(tkvdb *db, size_t limit, int dynalloc);
 void tkvdb_tr_free(tkvdb_tr *tr);
 
 TKVDB_RES tkvdb_begin(tkvdb_tr *tr);
