@@ -12,12 +12,12 @@ typedef struct tkvdb_cursor tkvdb_cursor;
 typedef enum TKVDB_RES
 {
 	TKVDB_OK = 0,
-	TKVDB_ERROR,
 	TKVDB_IO_ERROR,
 	TKVDB_LOCKED,
 	TKVDB_EMPTY,
 	TKVDB_ENOMEM,
-	TKVDB_CORRUPTED
+	TKVDB_CORRUPTED,
+	TKVDB_NOT_STARTED
 } TKVDB_RES;
 
 typedef enum TKVDB_SEEK

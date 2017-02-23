@@ -55,7 +55,19 @@ test_create_db(void)
 	TEST_CHECK(r == TKVDB_OK);
 
 	/* fill database with some data */
-	tkvdb_put(tr, "123", 3, "321", 3);
+	tkvdb_put(tr, "123", 3, "3", 1);
+	tkvdb_put(tr, "12345", 5, "5", 1);
+	tkvdb_put(tr, "12344", 5, "4", 1);
+
+	r = tkvdb_commit(tr);
+	TEST_CHECK(r == TKVDB_OK);
+
+	/* one more transaction */
+	r = tkvdb_begin(tr);
+	TEST_CHECK(r == TKVDB_OK);
+
+	r = tkvdb_put(tr, "321", 3, "1", 1);
+	TEST_CHECK(r == TKVDB_OK);
 
 	r = tkvdb_commit(tr);
 	TEST_CHECK(r == TKVDB_OK);
