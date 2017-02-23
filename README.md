@@ -7,10 +7,15 @@ Keys are always sorted in memcmp() order.
 
 ##Supported operations
 
-  Add a new key/value pair to the database.
-  Delete an existing key from the database. (NOT IMPLEMENTED YET)
-  Querying the database for a specific key. (NOT IMPLEMENTED YET)
-  Iterating through a range of database keys (either forwards or backwards). (FORWARD ONLY)
+  * Add a new key/value pair to the database.
+  * Delete an existing key from the database. (NOT IMPLEMENTED YET)
+  * Querying the database for a specific key. (NOT IMPLEMENTED YET)
+  * Iterating through a range of database keys (either forwards or backwards).
 
 ##Basic usage
 
+```
+db = tkvdb_open(db_name, params);
+/* ... */
+tkvdb_close(db);
+```

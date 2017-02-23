@@ -20,6 +20,13 @@ typedef enum TKVDB_RES
 	TKVDB_CORRUPTED
 } TKVDB_RES;
 
+typedef enum TKVDB_SEEK
+{
+	TKVDB_SEEK_EQ,
+	TKVDB_SEEK_LE,
+	TKVDB_SEEK_GE
+} TKVDB_SEEK;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -50,10 +57,12 @@ TKVDB_RES tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen,
 tkvdb_cursor *tkvdb_cursor_create(tkvdb_tr *tr);
 TKVDB_RES tkvdb_cursor_free(tkvdb_cursor *c);
 
+/* ??? */
 void *tkvdb_cursor_key(tkvdb_cursor *c);
 size_t tkvdb_cursor_keysize(tkvdb_cursor *c);
 
-TKVDB_RES tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen);
+TKVDB_RES tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen,
+	TKVDB_SEEK seek);
 TKVDB_RES tkvdb_first(tkvdb_cursor *c);
 TKVDB_RES tkvdb_last(tkvdb_cursor *c);
 
