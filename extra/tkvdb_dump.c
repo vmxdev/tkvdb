@@ -33,7 +33,7 @@ main(int argc, char *argv[])
 
 	c = tkvdb_cursor_create(tr);
 
-	r = tkvdb_first(c);
+	r = tkvdb_last(c);
 	if (r != TKVDB_OK) {
 		printf("Can't get first element, error code %d\n", r);
 		goto fail_cr;
@@ -47,7 +47,7 @@ main(int argc, char *argv[])
 	}
 
 	for (;;) {
-		r = tkvdb_next(c);
+		r = tkvdb_prev(c);
 
 		if (r == TKVDB_OK) {
 			char buf[100];
