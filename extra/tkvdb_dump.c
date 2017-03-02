@@ -20,15 +20,20 @@ print_kv(tkvdb_cursor *c)
 	size_t i;
 	uint8_t *buf;
 
+	putchar('"');
 	buf = tkvdb_cursor_key(c);
 	for (i=0; i<tkvdb_cursor_keysize(c); i++) {
 		int c = buf[i];
-		if (isprint(c)) {
+		if (c == '"') {
+			putchar('\\');
+			putchar('"');
+		} else if (isprint(c)) {
 			putchar(c);
 		} else {
 			printf("\\%2x", c);
 		}
 	}
+	putchar('"');
 	putchar('\n');
 }
 
@@ -75,26 +80,21 @@ main(int argc, char *argv[])
 
 	c = tkvdb_cursor_create(tr);
 
-	r = reverse ? tkvdb_last(c) : tkvdb_first(c);
-	if (r != TKVDB_OK) {
-		printf("Can't get first element, error code %d\n", r);
-		goto fail_cr;
-	}
-	print_kv(c);
+	for (r=reverse ? tkvdb_last(c) : tkvdb_first(c);
+		r==TKVDB_OK;
+		r = reverse ? tkvdb_prev(c) : tkvdb_next(c)) {
 
-	for (;;) {
-		r = reverse ? tkvdb_prev(c) : tkvdb_next(c);
-
-		if (r != TKVDB_OK) {
-			break;
-		}
 		print_kv(c);
 	}
-	r = tkvdb_rollback(tr);
+
+	tkvdb_cursor_free(c);
+
+	if ((r = tkvdb_rollback(tr))!= TKVDB_OK) {
+		printf("Can't rollback transaction, error code %d\n", r);
+		goto fail_tr;
+	}
 	ret = EXIT_SUCCESS;
 
-fail_cr:
-	tkvdb_cursor_free(c);
 fail_tr:
 	tkvdb_tr_free(tr);
 fail_db:

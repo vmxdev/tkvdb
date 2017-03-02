@@ -38,40 +38,82 @@ test_open_incorrect_db(void)
 	unlink(fn);
 }
 
+struct kv
+{
+	char *key;
+	char *val;
+} kvs[] = {
+	{"123", "0"},
+	{"12345", "1"},
+	{"12344", "2"},
+	{"321", "3"},
+	{"43210", "4"},
+	{"0123456789", "5"}
+};
+
 void
-test_create_db(void)
+test_fill_db(void)
 {
 	const char fn[] = "data_test.tkv";
 	tkvdb *db;
 	tkvdb_tr *tr;
-	TKVDB_RES r;
 
 	db = tkvdb_open(fn, NULL);
 	TEST_CHECK(db != NULL);
 	tr = tkvdb_tr_create(db);
 	TEST_CHECK(tr != NULL);
 
-	r = tkvdb_begin(tr);
-	TEST_CHECK(r == TKVDB_OK);
+	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
 
 	/* fill database with some data */
-	tkvdb_put(tr, "123", 3, "3", 1);
-	tkvdb_put(tr, "12345", 5, "5", 1);
-	tkvdb_put(tr, "12344", 5, "4", 1);
 
-	r = tkvdb_commit(tr);
-	TEST_CHECK(r == TKVDB_OK);
+#define PUT(I) TEST_CHECK(tkvdb_put(tr, kvs[I].key, strlen(kvs[I].key), \
+		kvs[I].val, strlen(kvs[I].val)) == TKVDB_OK)
+
+	PUT(0);
+	PUT(1);
+	PUT(2);
+
+	TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
 
 	/* one more transaction */
-	r = tkvdb_begin(tr);
-	TEST_CHECK(r == TKVDB_OK);
+	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
 
-	r = tkvdb_put(tr, "321", 3, "1", 1);
-	TEST_CHECK(r == TKVDB_OK);
+	PUT(3);
+	PUT(4);
+	PUT(5);
 
-	r = tkvdb_commit(tr);
-	TEST_CHECK(r == TKVDB_OK);
+#undef PUT
 
+	TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
+
+	tkvdb_tr_free(tr);
+	tkvdb_close(db);
+}
+
+void
+test_iter(void)
+{
+	const char fn[] = "data_test.tkv";
+	tkvdb *db;
+	tkvdb_tr *tr;
+	tkvdb_cursor *c;
+
+	db = tkvdb_open(fn, NULL);
+	TEST_CHECK(db != NULL);
+	tr = tkvdb_tr_create(db);
+	TEST_CHECK(tr != NULL);
+
+	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
+
+	c = tkvdb_cursor_create(tr);
+	TEST_CHECK(c != NULL);
+
+
+
+	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
+
+	tkvdb_cursor_free(c);
 	tkvdb_tr_free(tr);
 	tkvdb_close(db);
 }
@@ -79,7 +121,8 @@ test_create_db(void)
 TEST_LIST = {
 	{ "open db", test_open_db },
 	{ "open incorrect db file", test_open_incorrect_db },
-	{ "create db", test_create_db },
+	{ "fill db", test_fill_db },
+	{ "iterate db", test_iter },
 	{ 0 }
 };
 

@@ -910,8 +910,6 @@ tkvdb_biggest(tkvdb_cursor *c, tkvdb_memnode *node)
 	int off;
 	tkvdb_memnode *next;
 
-	off = 255;
-
 	for (;;) {
 		TKVDB_SKIP_RNODES(node);
 
@@ -926,14 +924,15 @@ tkvdb_biggest(tkvdb_cursor *c, tkvdb_memnode *node)
 				node->prefix_size);
 			c->prefix_size += node->prefix_size;
 		}
-		TKVDB_EXEC( tkvdb_cursor_push(c, node, off) );
 
 		/* if current node is key without value, search in subnodes */
 		off = 255;
 
 		TKVDB_SUBNODE_SEARCH(c->tr, node, next, off, 0);
+
 		if (!next) {
 			if (node->type & TKVDB_NODE_VAL) {
+				TKVDB_EXEC( tkvdb_cursor_push(c, node, 0) );
 				break;
 			} else {
 				return TKVDB_CORRUPTED;
@@ -945,7 +944,6 @@ tkvdb_biggest(tkvdb_cursor *c, tkvdb_memnode *node)
 		c->prefix[c->prefix_size] = off;
 		c->prefix_size++;
 
-		/* push node */
 		TKVDB_EXEC( tkvdb_cursor_push(c, node, off) );
 
 		node = next;
@@ -1115,33 +1113,32 @@ tkvdb_next(tkvdb_cursor *c)
 	int *off;
 	tkvdb_memnode *node, *next;
 
-next_node:
-	if (c->stack_size < 1) {
-		return TKVDB_EMPTY;
+	for (;;) {
+		if (c->stack_size < 1) {
+			break;
+		}
+
+		/* get node from stack's top */
+		node = c->stack[c->stack_size - 1].node;
+		off = &(c->stack[c->stack_size - 1].off);
+		(*off)++;
+
+		TKVDB_SUBNODE_SEARCH(c->tr, node, next, *off, 1);
+
+		if (next) {
+			/* expand cursor key */
+			TKVDB_EXEC( tkvdb_cursor_expand_prefix(c, 1) );
+			c->prefix[c->prefix_size] = *off;
+			c->prefix_size++;
+
+			return tkvdb_smallest(c, next);
+		}
+
+		/* pop */
+		TKVDB_EXEC( tkvdb_cursor_pop(c) );
 	}
 
-	/* get node from stack's top */
-	node = c->stack[c->stack_size - 1].node;
-	off = &(c->stack[c->stack_size - 1].off);
-	(*off)++;
-
-	TKVDB_SUBNODE_SEARCH(c->tr, node, next, *off, 1);
-
-	if (next) {
-		/* expand cursor key */
-		TKVDB_EXEC( tkvdb_cursor_expand_prefix(c, 1) );
-		c->prefix[c->prefix_size] = *off;
-		c->prefix_size++;
-
-		return tkvdb_smallest(c, next);
-	}
-
-	/* pop */
-	TKVDB_EXEC( tkvdb_cursor_pop(c) );
-
-	goto next_node;
-
-	return TKVDB_OK;
+	return TKVDB_EMPTY;
 }
 
 TKVDB_RES
@@ -1155,22 +1152,18 @@ tkvdb_prev(tkvdb_cursor *c)
 			return TKVDB_EMPTY;
 		}
 
+		node = c->stack[c->stack_size - 1].node;
 		off = &(c->stack[c->stack_size - 1].off);
-		if (*off > 0) {
-			(*off)--;
-			break;
+		(*off)--;
+
+		if (*off < 0) {
+			TKVDB_EXEC( tkvdb_cursor_pop(c) );
+			continue;
 		}
-		/* skip node with negative offset (we already visit it) */
-		TKVDB_EXEC( tkvdb_cursor_pop(c) );
-	}
 
-	node = c->stack[c->stack_size - 1].node;
-
-	for (;;) {
 		TKVDB_SUBNODE_SEARCH(c->tr, node, next, *off, 0);
 
 		if (next) {
-			/* expand cursor key */
 			TKVDB_EXEC( tkvdb_cursor_expand_prefix(c, 1) );
 			c->prefix[c->prefix_size] = *off;
 			c->prefix_size++;
@@ -1178,22 +1171,11 @@ tkvdb_prev(tkvdb_cursor *c)
 			return tkvdb_biggest(c, next);
 		}
 
-		if (c->stack_size < 2) {
-			return TKVDB_EMPTY;
-		}
-
-		node = c->stack[c->stack_size - 2].node;
-		off = &(c->stack[c->stack_size - 2].off);
-
-		/* stop if node has value */
 		if (node->type & TKVDB_NODE_VAL) {
-			/* mark node as visited */
-			*off = -1;
-			return TKVDB_OK;
+			break;
 		}
-		TKVDB_EXEC( tkvdb_cursor_pop(c) );
 
-		(*off)--;
+		TKVDB_EXEC( tkvdb_cursor_pop(c) );
 	}
 
 	return TKVDB_OK;
