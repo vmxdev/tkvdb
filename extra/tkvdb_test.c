@@ -109,11 +109,41 @@ test_iter(void)
 	c = tkvdb_cursor_create(tr);
 	TEST_CHECK(c != NULL);
 
+	/* check iteration */
+	TEST_CHECK(tkvdb_first(c) == TKVDB_OK);
+	TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[5].key,
+		tkvdb_cursor_keysize(c)) == 0);
 
+#define EXPECT_NEXT(N)\
+	TEST_CHECK(tkvdb_next(c) == TKVDB_OK);\
+	TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[N].key,\
+		tkvdb_cursor_keysize(c)) == 0)
 
-	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
+#define EXPECT_PREV(N)\
+	TEST_CHECK(tkvdb_prev(c) == TKVDB_OK);\
+	TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[N].key,\
+		tkvdb_cursor_keysize(c)) == 0)
+
+	EXPECT_NEXT(0);
+	EXPECT_NEXT(2);
+	EXPECT_NEXT(1);
+	EXPECT_NEXT(3);
+	EXPECT_NEXT(4);
+
+	EXPECT_PREV(3);
+	EXPECT_PREV(1);
+	EXPECT_PREV(2);
+	EXPECT_PREV(0);
+	EXPECT_PREV(5);
+
+#undef EXPECT_PREV
+#undef EXPECT_NEXT
+
+	TEST_CHECK(tkvdb_prev(c) == TKVDB_EMPTY);
 
 	tkvdb_cursor_free(c);
+	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
+
 	tkvdb_tr_free(tr);
 	tkvdb_close(db);
 }
