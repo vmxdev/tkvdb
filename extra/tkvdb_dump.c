@@ -24,13 +24,10 @@ print_kv(tkvdb_cursor *c)
 	buf = tkvdb_cursor_key(c);
 	for (i=0; i<tkvdb_cursor_keysize(c); i++) {
 		int c = buf[i];
-		if (c == '"') {
-			putchar('\\');
-			putchar('"');
-		} else if (isprint(c)) {
+		if (isprint(c) && (c != '"')) {
 			putchar(c);
 		} else {
-			printf("\\%2x", c);
+			printf("\\%02x", c);
 		}
 	}
 	putchar('"');
@@ -70,7 +67,7 @@ main(int argc, char *argv[])
 		fprintf(stderr, "Can't open %s\n", argv[optind]);
 		goto fail_db;
 	}
-	tr = tkvdb_tr_create_m(db, 1024*1024, 0);
+	tr = tkvdb_tr_create_m(db, 1024*1024*10, 0);
 
 	r = tkvdb_begin(tr);
 	if (r != TKVDB_OK) {

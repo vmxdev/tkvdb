@@ -57,7 +57,6 @@ TKVDB_RES tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen,
 tkvdb_cursor *tkvdb_cursor_create(tkvdb_tr *tr);
 TKVDB_RES tkvdb_cursor_free(tkvdb_cursor *c);
 
-/* ??? */
 void *tkvdb_cursor_key(tkvdb_cursor *c);
 size_t tkvdb_cursor_keysize(tkvdb_cursor *c);
 
