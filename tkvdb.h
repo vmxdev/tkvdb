@@ -15,6 +15,7 @@ typedef enum TKVDB_RES
 	TKVDB_IO_ERROR,
 	TKVDB_LOCKED,
 	TKVDB_EMPTY,
+	TKVDB_NOT_FOUND,
 	TKVDB_ENOMEM,
 	TKVDB_CORRUPTED,
 	TKVDB_NOT_STARTED
@@ -47,9 +48,12 @@ TKVDB_RES tkvdb_begin(tkvdb_tr *tr);
 TKVDB_RES tkvdb_commit(tkvdb_tr *tr);
 TKVDB_RES tkvdb_rollback(tkvdb_tr *tr);
 
+/* fsync() db file */
+TKVDB_RES tkvdb_sync(tkvdb *db);
+
 TKVDB_RES tkvdb_put(tkvdb_tr *tr, const void *key, size_t klen,
 	const void *val, size_t vlen);
-TKVDB_RES tkvdb_del(tkvdb_tr *tr, const void *key, size_t klen);
+TKVDB_RES tkvdb_del(tkvdb_tr *tr, const void *key, size_t klen, int del_pfx);
 TKVDB_RES tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen,
 	const void **val, size_t *vlen);
 

@@ -588,6 +588,10 @@ main(int argc, char** argv)
     SetUnhandledExceptionFilter(test_exception_filter__);
 #endif
 
+#if defined(CUTEST_INIT__)
+        CUTEST_INIT__;
+#endif
+
     /* Count all test units */
     test_count__ = 0;
     for(i = 0; test_list__[i].func != NULL; i++)

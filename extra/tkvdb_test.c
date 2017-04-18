@@ -2,10 +2,83 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <search.h>
+
+#include <ctype.h>
+#include <time.h>
 
 #include "tkvdb.h"
 
+static void test_init();
+#define CUTEST_INIT__ test_init()
 #include "cutest.h"
+
+#define KLEN 100
+#define VLEN 100
+#define N 2000
+#define TR_SIZE 10
+
+struct kv
+{
+	char key[KLEN];
+	char val[VLEN];
+
+	size_t klen, vlen;
+} kvs[N], kvs_unsorted[N];
+
+static int
+keycmp(const void *m1, const void *m2)
+{
+	size_t minlen;
+	const struct kv *a = m1;
+	const struct kv *b = m2;
+	int r;
+
+	minlen = (a->klen < b->klen) ? a->klen : b->klen;
+	r = memcmp(a->key, b->key, minlen);
+	if (r) {
+		return r;
+	}
+	return (a->klen - b->klen);
+}
+
+
+static void
+gen_rand()
+{
+	size_t i, j;
+
+	for (i=0; i<N; i++) {
+		struct kv datum;
+
+		for (;;) {
+			size_t nmemb = i;
+			datum.klen = rand() % (KLEN - 1) + 1;
+			for (j=0; j<datum.klen; j++) {
+				datum.key[j] = rand();
+			}
+			if (lfind(&datum, &kvs_unsorted, &nmemb, sizeof(struct kv), &keycmp) == NULL) {
+				break;
+			}
+		}
+
+		datum.vlen = rand() % (VLEN - 1) + 1;
+		for (j=0; j<datum.vlen; j++) {
+			datum.val[j] = rand();
+		}
+		kvs_unsorted[i] = datum;
+	}
+
+	memcpy(&kvs, &kvs_unsorted, sizeof(struct kv) * N);
+	/* sort generated data */
+	qsort(&kvs, N, sizeof(struct kv), &keycmp);
+}
+
+static void
+test_init()
+{
+	gen_rand();
+}
 
 void
 test_open_db(void)
@@ -38,54 +111,32 @@ test_open_incorrect_db(void)
 	unlink(fn);
 }
 
-struct kv
-{
-	char *key;
-	char *val;
-} kvs[] = {
-	{"123", "0"},
-	{"12345", "1"},
-	{"12344", "2"},
-	{"321", "3"},
-	{"43210", "4"},
-	{"0123456789", "5"}
-};
-
 void
 test_fill_db(void)
 {
 	const char fn[] = "data_test.tkv";
 	tkvdb *db;
 	tkvdb_tr *tr;
+	size_t i, j;
 
 	db = tkvdb_open(fn, NULL);
 	TEST_CHECK(db != NULL);
 	tr = tkvdb_tr_create(db);
 	TEST_CHECK(tr != NULL);
 
-	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
+	/* fill database */
+	for (i=0; i<N/TR_SIZE; i++) {
+		TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
 
-	/* fill database with some data */
+		for (j=0; j<TR_SIZE; j++) {
+			TEST_CHECK(tkvdb_put(tr, kvs_unsorted[i * TR_SIZE + j].key,
+				kvs_unsorted[i * TR_SIZE + j].klen,
+				kvs_unsorted[i * TR_SIZE + j].val,
+				kvs_unsorted[i * TR_SIZE + j].vlen) == TKVDB_OK);
+		}
 
-#define PUT(I) TEST_CHECK(tkvdb_put(tr, kvs[I].key, strlen(kvs[I].key), \
-		kvs[I].val, strlen(kvs[I].val)) == TKVDB_OK)
-
-	PUT(0);
-	PUT(1);
-	PUT(2);
-
-	TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
-
-	/* one more transaction */
-	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
-
-	PUT(3);
-	PUT(4);
-	PUT(5);
-
-#undef PUT
-
-	TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
+		TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
+	}
 
 	tkvdb_tr_free(tr);
 	tkvdb_close(db);
@@ -98,6 +149,8 @@ test_iter(void)
 	tkvdb *db;
 	tkvdb_tr *tr;
 	tkvdb_cursor *c;
+	size_t i;
+	int r;
 
 	db = tkvdb_open(fn, NULL);
 	TEST_CHECK(db != NULL);
@@ -109,37 +162,211 @@ test_iter(void)
 	c = tkvdb_cursor_create(tr);
 	TEST_CHECK(c != NULL);
 
-	/* check iteration */
+	/* iterate forward */
 	TEST_CHECK(tkvdb_first(c) == TKVDB_OK);
-	TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[5].key,
-		tkvdb_cursor_keysize(c)) == 0);
+	i = 0;
+	do {
+		TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[i].key,
+			tkvdb_cursor_keysize(c)) == 0);
+		i++;
+	} while ((r = tkvdb_next(c)) == TKVDB_OK);
 
-#define EXPECT_NEXT(N)\
-	TEST_CHECK(tkvdb_next(c) == TKVDB_OK);\
-	TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[N].key,\
-		tkvdb_cursor_keysize(c)) == 0)
+	TEST_CHECK(i == N);
 
-#define EXPECT_PREV(N)\
-	TEST_CHECK(tkvdb_prev(c) == TKVDB_OK);\
-	TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[N].key,\
-		tkvdb_cursor_keysize(c)) == 0)
+	/* backward */
+	TEST_CHECK(tkvdb_last(c) == TKVDB_OK);
+	i = 0;
+	do {
+		TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[N - i - 1].key,
+			tkvdb_cursor_keysize(c)) == 0);
+		i++;
+	} while (tkvdb_prev(c) == TKVDB_OK);
 
-	EXPECT_NEXT(0);
-	EXPECT_NEXT(2);
-	EXPECT_NEXT(1);
-	EXPECT_NEXT(3);
-	EXPECT_NEXT(4);
+	TEST_CHECK(i == N);
 
-	EXPECT_PREV(3);
-	EXPECT_PREV(1);
-	EXPECT_PREV(2);
-	EXPECT_PREV(0);
-	EXPECT_PREV(5);
+	tkvdb_cursor_free(c);
+	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
 
-#undef EXPECT_PREV
-#undef EXPECT_NEXT
+	tkvdb_tr_free(tr);
+	tkvdb_close(db);
+}
 
-	TEST_CHECK(tkvdb_prev(c) == TKVDB_EMPTY);
+void
+test_seek(void)
+{
+	const char fn[] = "data_test.tkv";
+	tkvdb *db;
+	tkvdb_tr *tr;
+	tkvdb_cursor *c;
+	size_t i;
+	const size_t NITER = 1000;
+
+	db = tkvdb_open(fn, NULL);
+	TEST_CHECK(db != NULL);
+	tr = tkvdb_tr_create(db);
+	TEST_CHECK(tr != NULL);
+
+	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
+
+	c = tkvdb_cursor_create(tr);
+	TEST_CHECK(c != NULL);
+
+	/* existent keys */
+	for (i=0; i<NITER; i++) {
+		int idx;
+		TKVDB_RES r;
+
+		idx = rand() % N;
+
+		r = tkvdb_seek(c, kvs[idx].key, kvs[idx].klen, TKVDB_SEEK_EQ);
+		TEST_CHECK(r == TKVDB_OK);
+	}
+
+	/* nonexistent */
+	for (i=0; i<NITER; i++) {
+		TKVDB_RES r;
+		size_t j;
+		struct kv datum;
+
+		do {
+			datum.klen = rand() % (KLEN - 1) + 1;
+			for (j=0; j<datum.klen; j++) {
+				datum.key[j] = rand();
+			}
+		} while (bsearch(&datum, &kvs, N, sizeof(struct kv), &keycmp));
+
+		r = tkvdb_seek(c, datum.key, datum.klen, TKVDB_SEEK_EQ);
+
+		TEST_CHECK(r == TKVDB_NOT_FOUND);
+	}
+
+	/* less or equal */
+	for (i=0; i<NITER; i++) {
+		TKVDB_RES r;
+		size_t j;
+		struct kv search, dat_db;
+		int kidx;
+
+		search.klen = rand() % (KLEN - 1) + 1;
+		for (j=0; j<search.klen; j++) {
+			search.key[j] = rand();
+		}
+
+		/* search for less or equal key in memory */
+		for (kidx=0; kidx<N; kidx++) {
+			int cmpres = keycmp(&search, &kvs[kidx]);
+			if (cmpres == 0) {
+				break;
+			}
+			if (cmpres < 0) {
+				kidx--;
+				break;
+			}
+		}
+		if (kidx == N) {
+			kidx--;
+		}
+
+		r = tkvdb_seek(c, search.key, search.klen, TKVDB_SEEK_LE);
+		if (kidx >= 0) {
+			TEST_CHECK(r == TKVDB_OK);
+			dat_db.klen = tkvdb_cursor_keysize(c);
+			memcpy(dat_db.key, tkvdb_cursor_key(c), dat_db.klen);
+			TEST_CHECK(keycmp(&dat_db, &kvs[kidx]) == 0);
+		} else {
+			TEST_CHECK(r == TKVDB_NOT_FOUND);
+		}
+	}
+
+	/* greater or equal */
+	for (i=0; i<NITER; i++) {
+		TKVDB_RES r;
+		size_t j;
+		struct kv search, dat_db;
+		int kidx;
+
+		search.klen = rand() % (KLEN - 1) + 1;
+		for (j=0; j<search.klen; j++) {
+			search.key[j] = rand();
+		}
+
+		/* search for greater or equal key in memory */
+		for (kidx=N; kidx-- > 0; ) {
+			int cmpres = keycmp(&search, &kvs[kidx]);
+			if (cmpres == 0) {
+				break;
+			}
+			if (cmpres > 0) {
+				kidx++;
+				break;
+			}
+		}
+		if (kidx < 0) {
+			kidx++;
+		}
+		if (kidx == N) {
+			kidx--;
+		}
+
+		r = tkvdb_seek(c, search.key, search.klen, TKVDB_SEEK_GE);
+		if ((kidx >= 0) && (kidx < (N - 1))) {
+			TEST_CHECK(r == TKVDB_OK);
+			dat_db.klen = tkvdb_cursor_keysize(c);
+			memcpy(dat_db.key, tkvdb_cursor_key(c), dat_db.klen);
+			TEST_CHECK(keycmp(&dat_db, &kvs[kidx]) == 0);
+		} else {
+			TEST_CHECK(r == TKVDB_NOT_FOUND);
+		}
+	}
+
+	tkvdb_cursor_free(c);
+	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
+
+	tkvdb_tr_free(tr);
+	tkvdb_close(db);
+}
+
+void
+test_del(void)
+{
+	const char fn[] = "data_test.tkv";
+	tkvdb *db;
+	tkvdb_tr *tr;
+	tkvdb_cursor *c;
+	size_t i;
+	int r;
+
+	db = tkvdb_open(fn, NULL);
+	TEST_CHECK(db != NULL);
+	tr = tkvdb_tr_create(db);
+	TEST_CHECK(tr != NULL);
+
+	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
+
+
+	for (i=0; i<N; i++) {
+		if (i % 2) {
+			r = tkvdb_del(tr, kvs[i].key, kvs[i].klen, 0);
+		}
+	}
+
+	c = tkvdb_cursor_create(tr);
+	TEST_CHECK(c != NULL);
+
+	/* iterate forward */
+#if 1
+	TEST_CHECK(tkvdb_first(c) == TKVDB_OK);
+	i = 1;
+	do {
+/*
+		TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[i].key,
+			tkvdb_cursor_keysize(c)) == 0);
+*/
+		i += 2;
+	} while ((r = tkvdb_next(c)) == TKVDB_OK);
+
+	TEST_CHECK(i == N);
+#endif
 
 	tkvdb_cursor_free(c);
 	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
@@ -152,7 +379,9 @@ TEST_LIST = {
 	{ "open db", test_open_db },
 	{ "open incorrect db file", test_open_incorrect_db },
 	{ "fill db", test_fill_db },
-	{ "iterate db", test_iter },
+	{ "first/last and next/prev", test_iter },
+	{ "random seeks", test_seek },
+	{ "delete", test_del },
 	{ 0 }
 };
 

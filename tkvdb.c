@@ -45,8 +45,8 @@
 /* read block size */
 #define TKVDB_READ_SIZE 4096
 
-/* max depth of search stack, assuming there will not 2**64 keys */
-#define TKVDB_STACK_MAX_DEPTH 64
+/* FIXME: allocate stack dynamically */
+#define TKVDB_STACK_MAX_DEPTH 128
 
 /* helper macro for executing functions which returns TKVDB_RES */
 #define TKVDB_EXEC(FUNC) \
@@ -108,7 +108,7 @@ struct tkvdb_disknode
 {
 	uint32_t size;        /* node size */
 	uint8_t type;         /* type (has value or metadata) */
-	uint8_t nsubnodes;    /* number of subnodes */
+	uint16_t nsubnodes;   /* number of subnodes */
 	uint32_t prefix_size; /* prefix size */
 
 	uint8_t data[1];      /* variable size data */
@@ -319,8 +319,9 @@ tkvdb_close(tkvdb *db)
 
 /* get memory for node
  * memory block is taken from system using malloc()
- * when 'tr->tr_buf_dynalloc' is true or from preallocated buffer
- * buffer is allocated in tkvdb_tr_create_m() */
+ * when 'tr->tr_buf_dynalloc' is true
+ * or from preallocated buffer
+ * preallocation occurs in tkvdb_tr_create_m() */
 static tkvdb_memnode *
 tkvdb_node_alloc(tkvdb_tr *tr, size_t node_size)
 {
@@ -840,7 +841,7 @@ tkvdb_cursor_pop(tkvdb_cursor *c)
 	tkvdb_memnode *node;
 
 	if (c->stack_size <= 1) {
-		return TKVDB_EMPTY;
+		return TKVDB_NOT_FOUND;
 	}
 
 	node = c->stack[c->stack_size - 1].node;
@@ -881,7 +882,12 @@ tkvdb_cursor_append_sym(tkvdb_cursor *c, int sym)
 static void
 tkvdb_cursor_reset(tkvdb_cursor *c)
 {
-	(void)c;
+	c->stack_size = 0;
+	if (c->prefix_size && c->prefix) {
+		free(c->prefix);
+		c->prefix = NULL;
+	}
+	c->prefix_size = 0;
 }
 
 static TKVDB_RES
@@ -889,8 +895,6 @@ tkvdb_smallest(tkvdb_cursor *c, tkvdb_memnode *node)
 {
 	int off;
 	tkvdb_memnode *next;
-
-	off = 0;
 
 	for (;;) {
 		/* skip replaced nodes */
@@ -910,7 +914,7 @@ tkvdb_smallest(tkvdb_cursor *c, tkvdb_memnode *node)
 
 		/* stop search at key-value node */
 		if (node->type & TKVDB_NODE_VAL) {
-			TKVDB_EXEC( tkvdb_cursor_push(c, node, /*off*/0) );
+			TKVDB_EXEC( tkvdb_cursor_push(c, node, /*off*/-1) );
 			break;
 		}
 
@@ -960,12 +964,11 @@ tkvdb_biggest(tkvdb_cursor *c, tkvdb_memnode *node)
 
 		/* if current node is key without value, search in subnodes */
 		off = 255;
-
 		TKVDB_SUBNODE_SEARCH(c->tr, node, next, off, 0);
 
 		if (!next) {
 			if (node->type & TKVDB_NODE_VAL) {
-				TKVDB_EXEC( tkvdb_cursor_push(c, node, 0) );
+				TKVDB_EXEC( tkvdb_cursor_push(c, node, -1) );
 				break;
 			} else {
 				return TKVDB_CORRUPTED;
@@ -1010,6 +1013,7 @@ tkvdb_cursor_load_root(tkvdb_cursor *c)
 TKVDB_RES
 tkvdb_first(tkvdb_cursor *c)
 {
+	tkvdb_cursor_reset(c);
 	TKVDB_EXEC( tkvdb_cursor_load_root(c) );
 	return tkvdb_smallest(c, c->tr->root);
 }
@@ -1017,6 +1021,7 @@ tkvdb_first(tkvdb_cursor *c)
 TKVDB_RES
 tkvdb_last(tkvdb_cursor *c)
 {
+	tkvdb_cursor_reset(c);
 	TKVDB_EXEC( tkvdb_cursor_load_root(c) );
 	return tkvdb_biggest(c, c->tr->root);
 }
@@ -1032,8 +1037,9 @@ tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen, TKVDB_SEEK seek)
 	int off = 0;
 
 	TKVDB_EXEC( tkvdb_cursor_load_root(c) );
-	node = c->tr->root;
+	tkvdb_cursor_reset(c);
 
+	node = c->tr->root;
 	sym = key;
 
 next_node:
@@ -1047,9 +1053,12 @@ next_byte:
 			&& (node->type & TKVDB_NODE_VAL)) {
 			TKVDB_EXEC ( tkvdb_cursor_append(c,
 				node->prefix_val_meta, node->prefix_size) );
-
 			TKVDB_EXEC ( tkvdb_cursor_push(c, node, *sym) );
 			return TKVDB_OK;
+		}
+
+		if (seek == TKVDB_SEEK_EQ) {
+			return TKVDB_NOT_FOUND;
 		}
 
 		TKVDB_EXEC ( tkvdb_smallest(c, node) );
@@ -1062,15 +1071,13 @@ next_byte:
 
 	if (pi >= node->prefix_size) {
 		/* end of prefix (but not the key) */
-		TKVDB_EXEC (tkvdb_cursor_append(c,
-			node->prefix_val_meta, node->prefix_size) );
-
 		next = NULL;
 		TKVDB_SUBNODE_NEXT(c->tr, node, next, *sym);
 		if (next) {
-			/* found next matching node, continue with it */
+			TKVDB_EXEC ( tkvdb_cursor_append(c,
+				node->prefix_val_meta, node->prefix_size) );
 
-			TKVDB_EXEC (tkvdb_cursor_append_sym(c, *sym) );
+			TKVDB_EXEC ( tkvdb_cursor_append_sym(c, *sym) );
 			TKVDB_EXEC ( tkvdb_cursor_push(c, node, *sym) );
 
 			node = next;
@@ -1080,7 +1087,7 @@ next_byte:
 
 		if (seek == TKVDB_SEEK_EQ) {
 			tkvdb_cursor_reset(c);
-			return TKVDB_EMPTY;
+			return TKVDB_NOT_FOUND;
 		}
 
 		off = *sym;
@@ -1091,22 +1098,29 @@ next_byte:
 				TKVDB_EXEC ( tkvdb_cursor_push(c, node, off) );
 				return tkvdb_biggest(c, next);
 			}
-			return tkvdb_smallest(c, node);
+			if (node->type & TKVDB_NODE_VAL) {
+				return TKVDB_OK;
+			}
+			TKVDB_EXEC ( tkvdb_smallest(c, node) );
+			return tkvdb_prev(c);
 		} else {
+			/* greater */
 			TKVDB_SUBNODE_SEARCH(c->tr, node, next, off, 1);
 			if (next) {
 				TKVDB_EXEC ( tkvdb_cursor_append_sym(c, off) );
 				TKVDB_EXEC ( tkvdb_cursor_push(c, node, off) );
 				return tkvdb_smallest(c, next);
 			}
-			return tkvdb_biggest(c, node);
+
+			TKVDB_EXEC ( tkvdb_biggest(c, node) );
+			return tkvdb_next(c);
 		}
 	}
 
 	if (node->prefix_val_meta[pi] != *sym) {
 		if (seek == TKVDB_SEEK_EQ) {
 			tkvdb_cursor_reset(c);
-			return TKVDB_EMPTY;
+			return TKVDB_NOT_FOUND;
 		}
 
 		if (seek == TKVDB_SEEK_LE) {
@@ -1117,9 +1131,10 @@ next_byte:
 			/* not optimal, we push node and pop it in prev() */
 			TKVDB_EXEC (tkvdb_cursor_append(c,
 				node->prefix_val_meta, node->prefix_size) );
-			TKVDB_EXEC ( tkvdb_cursor_push(c, node, 0) );
+			TKVDB_EXEC ( tkvdb_cursor_push(c, node, -1) );
 			return tkvdb_prev(c);
 		} else {
+			/* greater */
 			if (node->prefix_val_meta[pi] > *sym) {
 				return tkvdb_smallest(c, node);
 			}
@@ -1154,6 +1169,11 @@ tkvdb_next(tkvdb_cursor *c)
 		off = &(c->stack[c->stack_size - 1].off);
 		(*off)++;
 
+		if (*off > 255) {
+			TKVDB_EXEC( tkvdb_cursor_pop(c) );
+			continue;
+		}
+
 		TKVDB_SUBNODE_SEARCH(c->tr, node, next, *off, 1);
 
 		if (next) {
@@ -1169,7 +1189,7 @@ tkvdb_next(tkvdb_cursor *c)
 		TKVDB_EXEC( tkvdb_cursor_pop(c) );
 	}
 
-	return TKVDB_EMPTY;
+	return TKVDB_NOT_FOUND;
 }
 
 TKVDB_RES
@@ -1180,12 +1200,17 @@ tkvdb_prev(tkvdb_cursor *c)
 
 	for (;;) {
 		if (c->stack_size < 1) {
-			return TKVDB_EMPTY;
+			return TKVDB_NOT_FOUND;
 		}
 
 		node = c->stack[c->stack_size - 1].node;
 		off = &(c->stack[c->stack_size - 1].off);
 		(*off)--;
+
+		/* special case? */
+		if ((*off == -1) && (node->type & TKVDB_NODE_VAL)) {
+			break;
+		}
 
 		if (*off < 0) {
 			TKVDB_EXEC( tkvdb_cursor_pop(c) );
@@ -1493,6 +1518,12 @@ tkvdb_commit(tkvdb_tr *tr)
 		return TKVDB_OK;
 	}
 
+	if (!tr->root) {
+		/* empty transaction, rollback */
+		tkvdb_tr_reset(tr);
+		return TKVDB_OK;
+	}
+
 	/* try to set lock */
 	if (lseek(tr->db->fd, 0, SEEK_SET) != 0) {
 		return TKVDB_IO_ERROR;
@@ -1616,12 +1647,194 @@ fail_unlock:
 		return TKVDB_IO_ERROR;
 	}
 /*
-	if (fsync(tr->db->fd) < 0) {
+	if (sync && (fsync(tr->db->fd) < 0)) {
 		return TKVDB_IO_ERROR;
 	}
 */
 	tkvdb_tr_reset(tr);
 
 	return r;
+}
+
+static TKVDB_RES
+tkvdb_do_del(tkvdb_tr *tr, tkvdb_memnode *node, tkvdb_memnode *prev,
+	int prev_off)
+{
+	int i, n_subnodes = 0, concat_sym = -1;
+	tkvdb_memnode *new_node, *tail;
+
+	if (!prev) {
+		/* remove root node */
+		tkvdb_node_free(node);
+		node = tkvdb_node_new(tr, 0, 0, NULL, 0, NULL);
+		if (!node) {
+			return TKVDB_ENOMEM;
+		}
+		tr->root = node;
+
+		return TKVDB_OK;
+	}
+
+	if (prev->type & TKVDB_NODE_VAL) {
+		prev->next[prev_off] = NULL;
+		prev->fnext[prev_off] = 0;
+		tkvdb_node_free(node);
+		return TKVDB_OK;
+	}
+
+	/* removing subnode of node without value */
+	for (i=0; i<256; i++) {
+		if (prev->next[i] || prev->fnext[i]) {
+			n_subnodes++;
+			if (n_subnodes > 2) {
+				prev->next[prev_off] = NULL;
+				prev->fnext[prev_off] = 0;
+				tkvdb_node_free(node);
+				return TKVDB_OK;
+			} else if (i != prev_off) {
+				concat_sym = i;
+			}
+		}
+	}
+
+	/* concatenate 2 nodes */
+	tail = prev->next[concat_sym];
+	if (!tail) {
+		TKVDB_EXEC( tkvdb_node_read(tr, prev->fnext[concat_sym],
+			&tail) );
+	}
+	/* allocate new (concatenated) node */
+	new_node = tkvdb_node_alloc(tr, sizeof(tkvdb_memnode)
+		+ prev->prefix_size + 1
+		+ tail->prefix_size + tail->val_size + tail->meta_size);
+	if (!new_node) {
+		return TKVDB_ENOMEM;
+	}
+
+	new_node->type = tail->type;
+	new_node->prefix_size = prev->prefix_size + 1 + tail->prefix_size;
+	new_node->val_size = tail->val_size;
+	new_node->meta_size = tail->meta_size;
+
+	if (prev->prefix_size > 0) {
+		memcpy(new_node->prefix_val_meta, prev->prefix_val_meta,
+			prev->prefix_size);
+	}
+	new_node->prefix_val_meta[prev->prefix_size] = concat_sym;
+	if (tail->prefix_size > 0) {
+		memcpy(new_node->prefix_val_meta + prev->prefix_size + 1,
+			tail->prefix_val_meta,
+			tail->prefix_size);
+	}
+
+	if (tail->val_size > 0) {
+		memcpy(new_node->prefix_val_meta + new_node->prefix_size,
+			tail->prefix_val_meta + node->prefix_size,
+			tail->val_size);
+	}
+	memcpy(new_node->next, tail->next, sizeof(tkvdb_memnode *) * 256);
+	memcpy(new_node->fnext, tail->fnext, sizeof(uint64_t) * 256);
+
+	new_node->disk_size = 0;
+	new_node->disk_off = 0;
+
+	prev->type = TKVDB_NODE_REPLACED;
+	prev->replaced_by = new_node;
+
+	return TKVDB_OK;
+}
+
+TKVDB_RES
+tkvdb_del(tkvdb_tr *tr, const void *key, size_t klen, int del_pfx)
+{
+	const unsigned char *sym;
+	tkvdb_memnode *node, *prev;
+	size_t pi;
+	int prev_off = 0;
+
+	if (!tr->started) {
+		return TKVDB_NOT_STARTED;
+	}
+
+	/* check root */
+	if (tr->root == NULL) {
+		if (tr->db && (tr->root_off > TKVDB_TR_HDRSIZE)) {
+			/* we have underlying non-empty db file */
+			TKVDB_EXEC( tkvdb_node_read(tr, tr->root_off,
+				&(tr->root)) );
+		} else {
+			return TKVDB_EMPTY;
+		}
+	}
+
+	sym = key;
+	node = tr->root;
+	prev = NULL;
+
+next_node:
+	TKVDB_SKIP_RNODES(node);
+	pi = 0;
+
+next_byte:
+
+	if (sym >= ((unsigned char *)key + klen)) {
+		/* end of key */
+		if (pi == node->prefix_size) {
+			/* exact match */
+			return tkvdb_do_del(tr, node, prev, prev_off);
+		}
+
+		if (del_pfx) {
+			return tkvdb_do_del(tr, node, prev, prev_off);
+		} else {
+			return TKVDB_NOT_FOUND;
+		}
+	}
+
+	if (pi >= node->prefix_size) {
+		/* end of prefix */
+		if (node->next[*sym] != NULL) {
+			/* continue with next node */
+			prev = node;
+			prev_off = *sym;
+
+			node = node->next[*sym];
+			sym++;
+			goto next_node;
+		} else if (tr->db && (node->fnext[*sym] != 0)) {
+			tkvdb_memnode *tmp;
+
+			/* load subnode from disk */
+			TKVDB_EXEC( tkvdb_node_read(tr, node->fnext[*sym],
+				&tmp) );
+
+			prev = node;
+			prev_off = *sym;
+
+			node->next[*sym] = tmp;
+			node = tmp;
+			sym++;
+			goto next_node;
+		} else {
+			return TKVDB_NOT_FOUND;
+		}
+	}
+
+	if (node->prefix_val_meta[pi] != *sym) {
+		return TKVDB_NOT_FOUND;
+	}
+
+	sym++;
+	pi++;
+	goto next_byte;
+
+	return TKVDB_OK;
+}
+
+TKVDB_RES
+tkvdb_vacuum(tkvdb *db)
+{
+	(void)db;
+	return TKVDB_OK;
 }
 
