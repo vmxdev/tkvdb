@@ -55,7 +55,7 @@ TKVDB_RES tkvdb_put(tkvdb_tr *tr, const void *key, size_t klen,
 	const void *val, size_t vlen);
 TKVDB_RES tkvdb_del(tkvdb_tr *tr, const void *key, size_t klen, int del_pfx);
 TKVDB_RES tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen,
-	const void **val, size_t *vlen);
+	void **val, size_t *vlen);
 
 /* cursors manipulations */
 tkvdb_cursor *tkvdb_cursor_create(tkvdb_tr *tr);
@@ -63,6 +63,9 @@ TKVDB_RES tkvdb_cursor_free(tkvdb_cursor *c);
 
 void *tkvdb_cursor_key(tkvdb_cursor *c);
 size_t tkvdb_cursor_keysize(tkvdb_cursor *c);
+
+void *tkvdb_cursor_val(tkvdb_cursor *c);
+size_t tkvdb_cursor_valsize(tkvdb_cursor *c);
 
 TKVDB_RES tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen,
 	TKVDB_SEEK seek);

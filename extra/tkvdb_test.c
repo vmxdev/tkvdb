@@ -343,10 +343,10 @@ test_del(void)
 
 	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
 
-
 	for (i=0; i<N; i++) {
 		if (i % 2) {
 			r = tkvdb_del(tr, kvs[i].key, kvs[i].klen, 0);
+			TEST_CHECK(r == TKVDB_OK);
 		}
 	}
 
@@ -354,21 +354,76 @@ test_del(void)
 	TEST_CHECK(c != NULL);
 
 	/* iterate forward */
-#if 1
 	TEST_CHECK(tkvdb_first(c) == TKVDB_OK);
-	i = 1;
+	i = 0;
 	do {
-/*
 		TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[i].key,
 			tkvdb_cursor_keysize(c)) == 0);
-*/
+
 		i += 2;
 	} while ((r = tkvdb_next(c)) == TKVDB_OK);
 
 	TEST_CHECK(i == N);
-#endif
 
 	tkvdb_cursor_free(c);
+	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
+
+	tkvdb_tr_free(tr);
+	tkvdb_close(db);
+}
+
+void
+test_get(void)
+{
+	const char fn[] = "data_test.tkv";
+	tkvdb *db;
+	tkvdb_tr *tr;
+	size_t i;
+	const size_t NITER = 10000;
+	char *val;
+	size_t vlen;
+
+	db = tkvdb_open(fn, NULL);
+	TEST_CHECK(db != NULL);
+	tr = tkvdb_tr_create(db);
+	TEST_CHECK(tr != NULL);
+
+	TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
+
+	/* existent keys */
+	for (i=0; i<NITER; i++) {
+		int idx;
+		TKVDB_RES r;
+
+		idx = rand() % N;
+
+		r = tkvdb_get(tr, kvs[idx].key, kvs[idx].klen,
+			(void **)&val, &vlen);
+		TEST_CHECK(r == TKVDB_OK);
+		TEST_CHECK(kvs[idx].vlen == vlen);
+
+		TEST_CHECK(memcmp(val, kvs[idx].val, vlen) == 0);
+	}
+
+	/* nonexistent */
+	for (i=0; i<NITER; i++) {
+		TKVDB_RES r;
+		size_t j;
+		struct kv datum;
+
+		do {
+			datum.klen = rand() % (KLEN - 1) + 1;
+			for (j=0; j<datum.klen; j++) {
+				datum.key[j] = rand();
+			}
+		} while (bsearch(&datum, &kvs, N, sizeof(struct kv), &keycmp));
+
+		r = tkvdb_get(tr, datum.key, datum.klen,
+			(void **)&val, &vlen);
+
+		TEST_CHECK(r == TKVDB_NOT_FOUND);
+	}
+
 	TEST_CHECK(tkvdb_rollback(tr) == TKVDB_OK);
 
 	tkvdb_tr_free(tr);
@@ -381,6 +436,7 @@ TEST_LIST = {
 	{ "fill db", test_fill_db },
 	{ "first/last and next/prev", test_iter },
 	{ "random seeks", test_seek },
+	{ "get", test_get },
 	{ "delete", test_del },
 	{ 0 }
 };
