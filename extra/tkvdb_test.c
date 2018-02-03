@@ -359,6 +359,8 @@ test_del(void)
 	do {
 		TEST_CHECK(memcmp(tkvdb_cursor_key(c), kvs[i].key,
 			tkvdb_cursor_keysize(c)) == 0);
+		TEST_CHECK(memcmp(tkvdb_cursor_val(c), kvs[i].val,
+			tkvdb_cursor_valsize(c)) == 0);
 
 		i += 2;
 	} while ((r = tkvdb_next(c)) == TKVDB_OK);
