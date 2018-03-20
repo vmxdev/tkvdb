@@ -75,6 +75,8 @@ TKVDB_RES tkvdb_last(tkvdb_cursor *c);
 TKVDB_RES tkvdb_next(tkvdb_cursor *c);
 TKVDB_RES tkvdb_prev(tkvdb_cursor *c);
 
+TKVDB_RES tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c);
+
 #ifdef __cplusplus
 }
 #endif

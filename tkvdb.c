@@ -2045,11 +2045,10 @@ tkvdb_vac_next(tkvdb_cursor *c, uint64_t trdisk_begin, uint64_t trdisk_end)
 			continue;
 		}
 
-		/*TKVDB_SUBNODE_SEARCH(c->tr, node, next, *off, 1);*/
 		next = NULL;
 		for (; (*off)<256; (*off)++) {
 			if ((node->fnext[*off] > trdisk_begin)
-				&& (node->fnext[*off] < trdisk_end)) {
+				&& (node->fnext[*off] <= trdisk_end)) {
 
 				if (node->next[*off]) {
 					/* next subnode already loaded */
@@ -2151,6 +2150,8 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 	/* forcibly assign cursor to vacuumed transaction */
 	c->tr = vac;
 
+	TKVDB_EXEC( tkvdb_begin(tres) );
+
 	res = tkvdb_vac_smallest(c, node,
 		db_header.gap_end, db_header.gap_end + trsize);
 
@@ -2162,7 +2163,8 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 			db_header.gap_end, db_header.gap_end + trsize);
 	}
 
-	res = tkvdb_commit(tres);
+	/*res = tkvdb_commit(tres);*/
+	res = tkvdb_rollback(tres);
 
 	return res;
 }
