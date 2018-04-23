@@ -2,6 +2,7 @@
 #define tkvdb_h_included
 
 #include <limits.h>
+#include <stdint.h>
 
 typedef struct tkvdb tkvdb;
 typedef struct tkvdb_params tkvdb_params;
@@ -75,7 +76,12 @@ TKVDB_RES tkvdb_last(tkvdb_cursor *c);
 TKVDB_RES tkvdb_next(tkvdb_cursor *c);
 TKVDB_RES tkvdb_prev(tkvdb_cursor *c);
 
-TKVDB_RES tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c);
+/* vacuum */
+TKVDB_RES tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres,
+	tkvdb_cursor *c);
+/* get database file information */
+TKVDB_RES tkvdb_dbinfo(tkvdb *db, uint64_t *root_off,
+	uint64_t *gap_begin, uint64_t *gap_end);
 
 #ifdef __cplusplus
 }
