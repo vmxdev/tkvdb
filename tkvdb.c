@@ -272,7 +272,6 @@ tkvdb_open(const char *path, tkvdb_params *user_params)
 		db->write_buf = NULL;
 		db->write_buf_allocated = 0;
 	} else {
-		/* FIXME: calloc? */
 		db->write_buf = malloc(db->params.write_buf_limit);
 		if (!db->write_buf) {
 			goto fail_close;
@@ -638,7 +637,9 @@ next_byte:
 			node->prefix_val_meta + node->prefix_size);
 
 		if (!subnode_rest) {
-			free(newroot);
+			if (tr->tr_buf_dynalloc) {
+				free(newroot);
+			}
 			return TKVDB_ENOMEM;
 		}
 		tkvdb_clone_subnodes(subnode_rest, node);
@@ -714,7 +715,9 @@ next_byte:
 			node->val_size,
 			node->prefix_val_meta + node->prefix_size);
 		if (!subnode_rest) {
-			free(newroot);
+			if (tr->tr_buf_dynalloc) {
+				free(newroot);
+			}
 			return TKVDB_ENOMEM;
 		}
 		tkvdb_clone_subnodes(subnode_rest, node);
@@ -725,8 +728,10 @@ next_byte:
 			sym + 1,
 			vlen, val);
 		if (!subnode_key) {
-			free(subnode_rest);
-			free(newroot);
+			if (tr->tr_buf_dynalloc) {
+				free(subnode_rest);
+				free(newroot);
+			}
 			return TKVDB_ENOMEM;
 		}
 
@@ -1509,8 +1514,9 @@ tkvdb_node_calc_disksize(tkvdb_memnode *node)
 		+ node->meta_size;
 }
 
-TKVDB_RES
-tkvdb_commit(tkvdb_tr *tr)
+/* commit and return new root offset */
+static TKVDB_RES
+tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 {
 	size_t stack_depth = 0;
 	struct tkvdb_visit_helper stack[TKVDB_STACK_MAX_DEPTH];
@@ -1524,6 +1530,7 @@ tkvdb_commit(tkvdb_tr *tr)
 	/* size of last accessed node, will be added to node_off */
 	uint64_t last_node_size;
 	struct stat st;
+	int append;
 
 	tkvdb_memnode *node;
 	int off = 0;
@@ -1559,8 +1566,16 @@ tkvdb_commit(tkvdb_tr *tr)
 		return TKVDB_IO_ERROR;
 	}
 
-	/* append transaction to the end of file */
-	transaction_off = st.st_size;
+	if ((db_header.gap_end - db_header.gap_begin) > tr->tr_buf_allocated) {
+		/* we have enough space in vacuumed gap */
+		transaction_off = db_header.gap_begin;
+		append = 0;
+	} else {
+		/* append transaction to the end of file */
+		transaction_off = st.st_size;
+		append = 1;
+	}
+
 	/* first node offset */
 	node_off = transaction_off + TKVDB_TR_HDRSIZE;
 
@@ -1640,6 +1655,9 @@ tkvdb_commit(tkvdb_tr *tr)
 
 	/* write database header to disk */
 	db_header.root_off = transaction_off;
+	if (!append) {
+		db_header.gap_begin += node_off - transaction_off;
+	}
 
 	if (lseek(tr->db->fd, 0, SEEK_SET) != 0) {
 		return TKVDB_IO_ERROR;
@@ -1648,6 +1666,11 @@ tkvdb_commit(tkvdb_tr *tr)
 	if (write(tr->db->fd, &db_header, sizeof(struct tkvdb_header))
 		!= sizeof(struct tkvdb_header)) {
 		return TKVDB_IO_ERROR;
+	}
+
+	/* return new root offset */
+	if (root_off) {
+		*root_off = transaction_off;
 	}
 /*
 	if (sync && (fsync(tr->db->fd) < 0)) {
@@ -1658,6 +1681,12 @@ fail_node_to_buf:
 	tkvdb_tr_reset(tr);
 
 	return r;
+}
+
+TKVDB_RES
+tkvdb_commit(tkvdb_tr *tr)
+{
+	return tkvdb_do_commit(tr, NULL);
 }
 
 static TKVDB_RES
@@ -2161,7 +2190,9 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 	struct tkvdb_tr_header tr_header;
 	struct tkvdb *db;
 	ssize_t io_res;
+	size_t vac_tr_start; /* start of vacuumed transaction */
 	uint64_t trsize;
+	uint64_t root_off; /* offset of root after commit */
 	tkvdb_memnode *node;
 	TKVDB_RES res;
 
@@ -2249,9 +2280,12 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 			db_header.gap_end, db_header.gap_end + trsize);
 	}
 
-	TKVDB_EXEC( tkvdb_commit(tres) );
+	TKVDB_EXEC( tkvdb_do_commit(tres, &root_off) );
 
-	db_header.gap_end += trsize;
+	/* FIXME: wrong! (DB header changed after commit) */
+	if (db_header.gap_end) {
+		db_header.gap_end += trsize;
+	}
 	/* write new database header */
 	if (lseek(db->fd, 0, SEEK_SET) != 0) {
 		return TKVDB_IO_ERROR;

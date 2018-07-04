@@ -432,6 +432,66 @@ test_get(void)
 	tkvdb_close(db);
 }
 
+void
+test_vacuum(void)
+{
+	const char fn[] = "data_test_vac.tkv";
+	tkvdb *db;
+	tkvdb_tr *tr, *vac, *trres;
+	tkvdb_cursor *c;
+	size_t i, j;
+	const size_t NI = 10, NJ = 10, NK = 20;
+	uint64_t root_off, gap_begin, gap_end;
+
+	/* fill database */
+	db = tkvdb_open(fn, NULL);
+	TEST_CHECK(db != NULL);
+	tr = tkvdb_tr_create(db);
+	TEST_CHECK(tr != NULL);
+
+	for (i=0; i<NI; i++) {
+
+		TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
+
+		for (j=0; j<NJ; j++) {
+			char key[NK];
+			size_t klen;
+
+			sprintf(key, "%u-%03u", (unsigned int)i,
+				rand() % 1000);
+			klen = strlen(key) + 1;
+
+			TEST_CHECK(tkvdb_put(tr, key, klen, key, klen)
+				== TKVDB_OK);
+		}
+		TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
+	}
+
+	/* vacuum */
+	vac = tkvdb_tr_create(db);
+	TEST_CHECK(vac != NULL);
+
+	trres = tkvdb_tr_create(db);
+	TEST_CHECK(trres != NULL);
+
+	c = tkvdb_cursor_create(tr);
+	TEST_CHECK(c != NULL);
+
+	TEST_CHECK(tkvdb_vacuum(tr, vac, trres, c) == TKVDB_OK);
+
+	/* get file info */
+	TEST_CHECK(tkvdb_dbinfo(db, &root_off,
+		&gap_begin, &gap_end) == TKVDB_OK);
+	/*printf("%lu:%lu:%lu\n", root_off, gap_begin, gap_end);*/
+
+
+	tkvdb_tr_free(tr);
+	tkvdb_tr_free(vac);
+	tkvdb_tr_free(trres);
+	tkvdb_close(db);
+}
+
+
 TEST_LIST = {
 	{ "open db", test_open_db },
 	{ "open incorrect db file", test_open_incorrect_db },
@@ -440,6 +500,7 @@ TEST_LIST = {
 	{ "random seeks", test_seek },
 	{ "get", test_get },
 	{ "delete", test_del },
+	{ "vacuum", test_vacuum },
 	{ 0 }
 };
 
