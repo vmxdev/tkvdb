@@ -57,10 +57,15 @@ do {                                       \
 } while (0)
 
 /* skip replaced nodes */
-#define TKVDB_SKIP_RNODES(NODE)            \
-while (NODE->type & TKVDB_NODE_REPLACED) { \
-	NODE = NODE->replaced_by;          \
-}
+#define TKVDB_SKIP_RNODES(NODE)                              \
+do {                                                         \
+	while (NODE && (NODE->type & TKVDB_NODE_REPLACED)) { \
+		NODE = NODE->replaced_by;                    \
+	}                                                    \
+	if (!NODE) {                                         \
+		return TKVDB_CORRUPTED;                      \
+	}                                                    \
+} while (0)
 
 struct tkvdb_params
 {
@@ -358,6 +363,7 @@ tkvdb_node_new(tkvdb_tr *tr, int type, size_t prefix_size,
 	node->prefix_size = prefix_size;
 	node->val_size = vlen;
 	node->meta_size = 0;
+	node->replaced_by = NULL;
 	if (node->prefix_size > 0) {
 		memcpy(node->prefix_val_meta, prefix, node->prefix_size);
 	}
@@ -547,8 +553,7 @@ tkvdb_node_free(tkvdb_memnode *node)
 
 /* add key-value pair to memory transaction */
 TKVDB_RES
-tkvdb_put(tkvdb_tr *tr,
-	const void *key, size_t klen, const void *val, size_t vlen)
+tkvdb_put(tkvdb_tr *tr, const tkvdb_datum *key, const tkvdb_datum *val)
 {
 	const unsigned char *sym;  /* pointer to current symbol in key */
 	tkvdb_memnode *node;       /* current node */
@@ -566,7 +571,7 @@ tkvdb_put(tkvdb_tr *tr,
 				&(tr->root)) );
 		} else {
 			tr->root = tkvdb_node_new(tr, TKVDB_NODE_VAL,
-				klen, key, vlen, val);
+				key->len, key->data, val->len, val->data);
 			if (!tr->root) {
 				return TKVDB_ENOMEM;
 			}
@@ -574,7 +579,7 @@ tkvdb_put(tkvdb_tr *tr,
 		}
 	}
 
-	sym = key;
+	sym = key->data;
 	node = tr->root;
 
 next_node:
@@ -592,21 +597,23 @@ next_byte:
   [p][r][e][f][i][x] - prefix
   [p][r][e][f][i][x] - new key
 */
-	if (sym >= ((unsigned char *)key + klen)) {
+	if (sym >= ((unsigned char *)key->data + key->len)) {
 		tkvdb_memnode *newroot, *subnode_rest;
 
 		if (pi == node->prefix_size) {
 			/* exact match */
-			if ((node->val_size == vlen) && (vlen != 0)) {
+			if ((node->val_size == val->len) && (val->len != 0)) {
 				/* same value size, so copy new value and
 					return */
 				memcpy(node->prefix_val_meta
-					+ node->prefix_size, val, vlen);
+					+ node->prefix_size,
+					val->data, val->len);
 				return TKVDB_OK;
 			}
 
 			newroot = tkvdb_node_new(tr, TKVDB_NODE_VAL,
-				pi, node->prefix_val_meta, vlen, val);
+				pi, node->prefix_val_meta,
+				val->len, val->data);
 			if (!newroot) return TKVDB_ENOMEM;
 
 			tkvdb_clone_subnodes(newroot, node);
@@ -627,7 +634,7 @@ next_byte:
 */
 		newroot = tkvdb_node_new(tr, TKVDB_NODE_VAL, pi,
 			node->prefix_val_meta,
-			vlen, val);
+			val->len, val->data);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		subnode_rest = tkvdb_node_new(tr, node->type,
@@ -682,9 +689,10 @@ next_byte:
 
 			/* allocate tail */
 			tmp = tkvdb_node_new(tr, TKVDB_NODE_VAL,
-				klen - (sym - (unsigned char *)key) - 1,
+				key->len -
+					(sym - (unsigned char *)key->data) - 1,
 				sym + 1,
-				vlen, val);
+				val->len, val->data);
 			if (!tmp) return TKVDB_ENOMEM;
 
 			node->next[*sym] = tmp;
@@ -724,9 +732,10 @@ next_byte:
 
 		/* rest of key */
 		subnode_key = tkvdb_node_new(tr, TKVDB_NODE_VAL,
-			klen - (sym - (unsigned char *)key) - 1,
+			key->len -
+				(sym - (unsigned char *)key->data) - 1,
 			sym + 1,
-			vlen, val);
+			val->len, val->data);
 		if (!subnode_key) {
 			if (tr->tr_buf_dynalloc) {
 				free(subnode_rest);
@@ -1043,7 +1052,7 @@ tkvdb_last(tkvdb_cursor *c)
 
 /* seek to key (or to nearest key, less or greater) */
 TKVDB_RES
-tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen, TKVDB_SEEK seek)
+tkvdb_seek(tkvdb_cursor *c, const tkvdb_datum *key, TKVDB_SEEK seek)
 {
 	tkvdb_memnode *node, *next;
 
@@ -1055,14 +1064,14 @@ tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen, TKVDB_SEEK seek)
 	tkvdb_cursor_reset(c);
 
 	node = c->tr->root;
-	sym = key;
+	sym = key->data;
 
 next_node:
 	TKVDB_SKIP_RNODES(node);
 	pi = 0;
 
 next_byte:
-	if (sym >= ((uint8_t *)key + klen)) {
+	if (sym >= ((uint8_t *)key->data + key->len)) {
 		/* end of key */
 		if ((pi == node->prefix_size)
 			&& (node->type & TKVDB_NODE_VAL)) {
@@ -1806,7 +1815,7 @@ tkvdb_do_del(tkvdb_tr *tr, tkvdb_memnode *node, tkvdb_memnode *prev,
 }
 
 TKVDB_RES
-tkvdb_del(tkvdb_tr *tr, const void *key, size_t klen, int del_pfx)
+tkvdb_del(tkvdb_tr *tr, const tkvdb_datum *key, int del_pfx)
 {
 	const unsigned char *sym;
 	tkvdb_memnode *node, *prev;
@@ -1828,7 +1837,7 @@ tkvdb_del(tkvdb_tr *tr, const void *key, size_t klen, int del_pfx)
 		}
 	}
 
-	sym = key;
+	sym = key->data;
 	node = tr->root;
 	prev = NULL;
 
@@ -1838,7 +1847,7 @@ next_node:
 
 next_byte:
 
-	if (sym >= ((unsigned char *)key + klen)) {
+	if (sym >= ((unsigned char *)key->data + key->len)) {
 		/* end of key */
 		if (pi == node->prefix_size) {
 			/* exact match */
@@ -1888,7 +1897,7 @@ next_byte:
 
 /* get value for given key */
 TKVDB_RES
-tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen, void **val, size_t *vlen)
+tkvdb_get(tkvdb_tr *tr, const tkvdb_datum *key, tkvdb_datum *val)
 {
 	const unsigned char *sym;
 	size_t pi;
@@ -1910,7 +1919,7 @@ tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen, void **val, size_t *vlen)
 		}
 	}
 
-	sym = key;
+	sym = key->data;
 	node = tr->root;
 	off = tr->root_off;
 
@@ -1920,13 +1929,13 @@ next_node:
 
 next_byte:
 
-	if (sym >= ((unsigned char *)key + klen)) {
+	if (sym >= ((unsigned char *)key->data + key->len)) {
 		/* end of key */
 		if ((pi == node->prefix_size)
 			&& (node->type & TKVDB_NODE_VAL)) {
 			/* exact match and node with value */
-			*vlen = node->val_size;
-			*val = node->prefix_val_meta + node->prefix_size;
+			val->len = node->val_size;
+			val->data = node->prefix_val_meta + node->prefix_size;
 			return TKVDB_OK;
 		} else {
 			return TKVDB_NOT_FOUND;
@@ -2270,11 +2279,13 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 
 		if ((res == TKVDB_OK) && in_tr) {
 			/* key is in vac transaction */
-			TKVDB_EXEC( tkvdb_put(tres,
-				tkvdb_cursor_key(c),
-				tkvdb_cursor_keysize(c),
-				tkvdb_cursor_val(c),
-				tkvdb_cursor_valsize(c)) );
+			tkvdb_datum key, val;
+
+			key.data = tkvdb_cursor_key(c);
+			key.len  = tkvdb_cursor_keysize(c);
+			val.data = tkvdb_cursor_val(c);
+			val.len  = tkvdb_cursor_valsize(c);
+			TKVDB_EXEC( tkvdb_put(tres, &key, &val) );
 		}
 		res = tkvdb_vac_next(c,
 			db_header.gap_end, db_header.gap_end + trsize);

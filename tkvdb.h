@@ -29,6 +29,12 @@ typedef enum TKVDB_SEEK
 	TKVDB_SEEK_GE
 } TKVDB_SEEK;
 
+typedef struct tkvdb_datum
+{
+	void *data;
+	size_t len;
+} tkvdb_datum;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -52,11 +58,10 @@ TKVDB_RES tkvdb_rollback(tkvdb_tr *tr);
 /* fsync() db file */
 TKVDB_RES tkvdb_sync(tkvdb *db);
 
-TKVDB_RES tkvdb_put(tkvdb_tr *tr, const void *key, size_t klen,
-	const void *val, size_t vlen);
-TKVDB_RES tkvdb_del(tkvdb_tr *tr, const void *key, size_t klen, int del_pfx);
-TKVDB_RES tkvdb_get(tkvdb_tr *tr, const void *key, size_t klen,
-	void **val, size_t *vlen);
+TKVDB_RES tkvdb_put(tkvdb_tr *tr,
+	const tkvdb_datum *key, const tkvdb_datum *val);
+TKVDB_RES tkvdb_del(tkvdb_tr *tr, const tkvdb_datum *key, int del_pfx);
+TKVDB_RES tkvdb_get(tkvdb_tr *tr, const tkvdb_datum *key, tkvdb_datum *val);
 
 /* cursors */
 tkvdb_cursor *tkvdb_cursor_create(tkvdb_tr *tr);
@@ -68,8 +73,7 @@ size_t tkvdb_cursor_keysize(tkvdb_cursor *c);
 void *tkvdb_cursor_val(tkvdb_cursor *c);
 size_t tkvdb_cursor_valsize(tkvdb_cursor *c);
 
-TKVDB_RES tkvdb_seek(tkvdb_cursor *c, const void *key, size_t klen,
-	TKVDB_SEEK seek);
+TKVDB_RES tkvdb_seek(tkvdb_cursor *c, const tkvdb_datum *key, TKVDB_SEEK seek);
 TKVDB_RES tkvdb_first(tkvdb_cursor *c);
 TKVDB_RES tkvdb_last(tkvdb_cursor *c);
 

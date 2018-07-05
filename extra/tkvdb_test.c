@@ -129,10 +129,13 @@ test_fill_db(void)
 		TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
 
 		for (j=0; j<TR_SIZE; j++) {
-			TEST_CHECK(tkvdb_put(tr, kvs_unsorted[i * TR_SIZE + j].key,
-				kvs_unsorted[i * TR_SIZE + j].klen,
-				kvs_unsorted[i * TR_SIZE + j].val,
-				kvs_unsorted[i * TR_SIZE + j].vlen) == TKVDB_OK);
+			tkvdb_datum key, val;
+
+			key.data = kvs_unsorted[i * TR_SIZE + j].key;
+			key.len  = kvs_unsorted[i * TR_SIZE + j].klen;
+			val.data = kvs_unsorted[i * TR_SIZE + j].val;
+			val.len  = kvs_unsorted[i * TR_SIZE + j].vlen;
+			TEST_CHECK(tkvdb_put(tr, &key, &val) == TKVDB_OK);
 		}
 
 		TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
@@ -200,6 +203,7 @@ test_seek(void)
 	tkvdb_cursor *c;
 	size_t i;
 	const size_t NITER = 1000;
+	tkvdb_datum dtk;
 
 	db = tkvdb_open(fn, NULL);
 	TEST_CHECK(db != NULL);
@@ -218,7 +222,9 @@ test_seek(void)
 
 		idx = rand() % N;
 
-		r = tkvdb_seek(c, kvs[idx].key, kvs[idx].klen, TKVDB_SEEK_EQ);
+		dtk.data = kvs[idx].key;
+		dtk.len = kvs[idx].klen;
+		r = tkvdb_seek(c, &dtk, TKVDB_SEEK_EQ);
 		TEST_CHECK(r == TKVDB_OK);
 	}
 
@@ -235,7 +241,9 @@ test_seek(void)
 			}
 		} while (bsearch(&datum, &kvs, N, sizeof(struct kv), &keycmp));
 
-		r = tkvdb_seek(c, datum.key, datum.klen, TKVDB_SEEK_EQ);
+		dtk.data = datum.key;
+		dtk.len = datum.klen;
+		r = tkvdb_seek(c, &dtk, TKVDB_SEEK_EQ);
 
 		TEST_CHECK(r == TKVDB_NOT_FOUND);
 	}
@@ -267,7 +275,9 @@ test_seek(void)
 			kidx--;
 		}
 
-		r = tkvdb_seek(c, search.key, search.klen, TKVDB_SEEK_LE);
+		dtk.data = search.key;
+		dtk.len = search.klen;
+		r = tkvdb_seek(c, &dtk, TKVDB_SEEK_LE);
 		if (kidx >= 0) {
 			TEST_CHECK(r == TKVDB_OK);
 			dat_db.klen = tkvdb_cursor_keysize(c);
@@ -308,7 +318,9 @@ test_seek(void)
 			kidx--;
 		}
 
-		r = tkvdb_seek(c, search.key, search.klen, TKVDB_SEEK_GE);
+		dtk.data = search.key;
+		dtk.len = search.klen;
+		r = tkvdb_seek(c, &dtk, TKVDB_SEEK_GE);
 		if ((kidx >= 0) && (kidx < (N - 1))) {
 			TEST_CHECK(r == TKVDB_OK);
 			dat_db.klen = tkvdb_cursor_keysize(c);
@@ -345,7 +357,11 @@ test_del(void)
 
 	for (i=0; i<N; i++) {
 		if (i % 2) {
-			r = tkvdb_del(tr, kvs[i].key, kvs[i].klen, 0);
+			tkvdb_datum dtk;
+
+			dtk.data = kvs[i].key;
+			dtk.len = kvs[i].klen;
+			r = tkvdb_del(tr, &dtk, 0);
 			TEST_CHECK(r == TKVDB_OK);
 		}
 	}
@@ -382,8 +398,7 @@ test_get(void)
 	tkvdb_tr *tr;
 	size_t i;
 	const size_t NITER = 10000;
-	char *val;
-	size_t vlen;
+	tkvdb_datum dtk, dtv;
 
 	db = tkvdb_open(fn, NULL);
 	TEST_CHECK(db != NULL);
@@ -399,12 +414,13 @@ test_get(void)
 
 		idx = rand() % N;
 
-		r = tkvdb_get(tr, kvs[idx].key, kvs[idx].klen,
-			(void **)&val, &vlen);
+		dtk.data = kvs[idx].key;
+		dtk.len = kvs[idx].klen;
+		r = tkvdb_get(tr, &dtk, &dtv);
 		TEST_CHECK(r == TKVDB_OK);
-		TEST_CHECK(kvs[idx].vlen == vlen);
+		TEST_CHECK(kvs[idx].vlen == dtv.len);
 
-		TEST_CHECK(memcmp(val, kvs[idx].val, vlen) == 0);
+		TEST_CHECK(memcmp(dtv.data, kvs[idx].val, dtv.len) == 0);
 	}
 
 	/* nonexistent */
@@ -420,8 +436,9 @@ test_get(void)
 			}
 		} while (bsearch(&datum, &kvs, N, sizeof(struct kv), &keycmp));
 
-		r = tkvdb_get(tr, datum.key, datum.klen,
-			(void **)&val, &vlen);
+		dtk.data = datum.key;
+		dtk.len = datum.klen;
+		r = tkvdb_get(tr, &dtk, &dtv);
 
 		TEST_CHECK(r == TKVDB_NOT_FOUND);
 	}
@@ -454,14 +471,15 @@ test_vacuum(void)
 		TEST_CHECK(tkvdb_begin(tr) == TKVDB_OK);
 
 		for (j=0; j<NJ; j++) {
+			tkvdb_datum datkey;
 			char key[NK];
-			size_t klen;
 
 			sprintf(key, "%u-%03u", (unsigned int)i,
 				rand() % 1000);
-			klen = strlen(key) + 1;
+			datkey.len = strlen(key) + 1;
+			datkey.data = key;
 
-			TEST_CHECK(tkvdb_put(tr, key, klen, key, klen)
+			TEST_CHECK(tkvdb_put(tr, &datkey, &datkey)
 				== TKVDB_OK);
 		}
 		TEST_CHECK(tkvdb_commit(tr) == TKVDB_OK);
