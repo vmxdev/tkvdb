@@ -63,7 +63,7 @@ do {                                                         \
 		NODE = NODE->replaced_by;                    \
 	}                                                    \
 	if (!NODE) {                                         \
-		return TKVDB_CORRUPTED;                      \
+		return TKVDB_MODIFIED;                       \
 	}                                                    \
 } while (0)
 

@@ -3,6 +3,7 @@
 
 #include <limits.h>
 #include <stdint.h>
+#include <stddef.h>
 
 typedef struct tkvdb tkvdb;
 typedef struct tkvdb_params tkvdb_params;
@@ -19,7 +20,8 @@ typedef enum TKVDB_RES
 	TKVDB_NOT_FOUND,
 	TKVDB_ENOMEM,
 	TKVDB_CORRUPTED,
-	TKVDB_NOT_STARTED
+	TKVDB_NOT_STARTED,
+	TKVDB_MODIFIED
 } TKVDB_RES;
 
 typedef enum TKVDB_SEEK
