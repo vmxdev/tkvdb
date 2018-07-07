@@ -34,7 +34,6 @@
 /* node properties */
 #define TKVDB_NODE_VAL  (1 << 0)
 #define TKVDB_NODE_META (1 << 1)
-#define TKVDB_NODE_REPLACED (1 << 2)
 
 /* max number of subnodes we store as [symbols array] => [offsets array]
  * if number of subnodes is more than TKVDB_SUBNODES_THR, they stored on disk
@@ -57,14 +56,16 @@ do {                                       \
 } while (0)
 
 /* skip replaced nodes */
-#define TKVDB_SKIP_RNODES(NODE)                              \
-do {                                                         \
-	while (NODE && (NODE->type & TKVDB_NODE_REPLACED)) { \
-		NODE = NODE->replaced_by;                    \
-	}                                                    \
-	if (!NODE) {                                         \
-		return TKVDB_MODIFIED;                       \
-	}                                                    \
+#define TKVDB_SKIP_RNODES(NODE)            \
+while (NODE->replaced_by) {                \
+	NODE = NODE->replaced_by;          \
+} while (0)
+
+/* replace node with updated one */
+/* FIXME: (optional) memory barrier? */
+#define TKVDB_REPLACE_NODE(NODE, NEWNODE)  \
+do {                                       \
+	NODE->replaced_by = NEWNODE;       \
 } while (0)
 
 struct tkvdb_params
@@ -442,6 +443,7 @@ tkvdb_node_read(tkvdb_tr *tr, uint64_t off, tkvdb_memnode **node_ptr)
 		return TKVDB_ENOMEM;
 	}
 
+	(*node_ptr)->replaced_by = NULL;
 	/* now fill memnode with values from disk node */
 	(*node_ptr)->type = disknode->type;
 	(*node_ptr)->prefix_size = disknode->prefix_size;
@@ -510,7 +512,7 @@ tkvdb_node_free(tkvdb_memnode *node)
 	int off = 0;
 
 	for (;;) {
-		if (node->type & TKVDB_NODE_REPLACED) {
+		if (node->replaced_by) {
 			next = node->replaced_by;
 			free(node);
 			node = next;
@@ -618,8 +620,7 @@ next_byte:
 
 			tkvdb_clone_subnodes(newroot, node);
 
-			node->type = TKVDB_NODE_REPLACED;
-			node->replaced_by = newroot;
+			TKVDB_REPLACE_NODE(node, newroot);
 
 			return TKVDB_OK;
 		}
@@ -653,8 +654,7 @@ next_byte:
 
 		newroot->next[node->prefix_val_meta[pi]] = subnode_rest;
 
-		node->type = TKVDB_NODE_REPLACED;
-		node->replaced_by = newroot;
+		TKVDB_REPLACE_NODE(node, newroot);
 
 		return TKVDB_OK;
 	}
@@ -747,8 +747,7 @@ next_byte:
 		newroot->next[node->prefix_val_meta[pi]] = subnode_rest;
 		newroot->next[*sym] = subnode_key;
 
-		node->type = TKVDB_NODE_REPLACED;
-		node->replaced_by = newroot;
+		TKVDB_REPLACE_NODE(node, newroot);
 
 		return TKVDB_OK;
 	}
@@ -1808,8 +1807,7 @@ tkvdb_do_del(tkvdb_tr *tr, tkvdb_memnode *node, tkvdb_memnode *prev,
 	new_node->disk_size = 0;
 	new_node->disk_off = 0;
 
-	prev->type = TKVDB_NODE_REPLACED;
-	prev->replaced_by = new_node;
+	TKVDB_REPLACE_NODE(prev, new_node);
 
 	return TKVDB_OK;
 }
