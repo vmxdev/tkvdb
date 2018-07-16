@@ -28,6 +28,12 @@
 
 #define TKVDB_SIGNATURE    "tkvdb002"
 
+/* at the begin of each on-disk block there is a byte with type.
+ * footer marked as removed is used in vacuum procedure */
+#define TKVDB_BLOCKTYPE_TRANSACTION  0
+#define TKVDB_BLOCKTYPE_FOOTER       1
+#define TKVDB_BLOCKTYPE_RM_FOOTER    2
+
 /* node properties */
 #define TKVDB_NODE_VAL  (1 << 0)
 #define TKVDB_NODE_META (1 << 1)
@@ -77,9 +83,17 @@ struct tkvdb_params
 	int tr_buf_dynalloc;    /* realloc transaction buffer when needed */
 };
 
+/* on-disk transaction header */
+struct tkvdb_tr_header
+{
+	uint8_t type;
+	uint64_t footer_off;       /* pointer to footer */
+} __attribute__((packed));
+
 /* on-disk transaction footer */
 struct tkvdb_tr_footer
 {
+	/*uint8_t type;*/
 	uint8_t signature[8];
 	uint64_t root_off;         /* offset of root node */
 	uint64_t transaction_size; /* transaction size */
@@ -373,6 +387,10 @@ tkvdb_node_alloc(tkvdb_tr *tr, size_t node_size)
 			return NULL;
 		}
 	} else {
+		/* FIXME: don't hardcode! check space! */
+		/* align to 16-byte boundary */
+		tr->tr_buf_ptr = (uint8_t *)
+			((uintptr_t)(tr->tr_buf_ptr + 16 - 1) & (-16));
 		node = (tkvdb_memnode *)tr->tr_buf_ptr;
 		tr->tr_buf_ptr += node_size;
 	}
