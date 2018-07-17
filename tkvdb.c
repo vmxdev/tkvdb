@@ -26,7 +26,7 @@
 
 #include "tkvdb.h"
 
-#define TKVDB_SIGNATURE    "tkvdb002"
+#define TKVDB_SIGNATURE    "tkvdb003"
 
 /* at the begin of each on-disk block there is a byte with type.
  * footer marked as removed is used in vacuum procedure */
@@ -93,7 +93,7 @@ struct tkvdb_tr_header
 /* on-disk transaction footer */
 struct tkvdb_tr_footer
 {
-	/*uint8_t type;*/
+	uint8_t type;
 	uint8_t signature[8];
 	uint64_t root_off;         /* offset of root node */
 	uint64_t transaction_size; /* transaction size */
@@ -1597,6 +1597,7 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 	/* size of last accessed node, will be added to node_off */
 	uint64_t last_node_size;
 	int append;
+	struct tkvdb_tr_header *header_ptr;
 
 	tkvdb_memnode *node;
 	int off = 0;
@@ -1653,8 +1654,8 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 		append = 1;
 	}
 
-	/* first node offset */
-	node_off = transaction_off;
+	/* first node offset, skip transaction header */
+	node_off = transaction_off + sizeof(struct tkvdb_tr_header);
 
 	last_node_size = 0;
 
@@ -1715,7 +1716,8 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 
 	node_off += last_node_size;
 
-	tr->db->info.footer.root_off = transaction_off;
+	tr->db->info.footer.root_off = transaction_off
+		+ sizeof(struct tkvdb_tr_header);
 	tr->db->info.footer.transaction_size = node_off - transaction_off;
 
 	/* seek */
@@ -1724,10 +1726,15 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 		return TKVDB_IO_ERROR;
 	}
 
-	/* prepare footer and write */
+	/* prepare header, footer and write */
+	header_ptr = (struct tkvdb_tr_header *)tr->db->write_buf;
+	header_ptr->type = TKVDB_BLOCKTYPE_TRANSACTION;
+	tr->db->info.footer.type = TKVDB_BLOCKTYPE_FOOTER;
 	if (append) {
 		ssize_t wsize;
 		struct tkvdb_tr_footer *footer_ptr;
+
+		header_ptr->footer_off = node_off; /* FIXME: check */
 
 		wsize = tr->db->info.footer.transaction_size
 			+ TKVDB_TR_FTRSIZE;
@@ -1748,6 +1755,7 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 		wsize = tr->db->info.footer.transaction_size;
 		tr->db->info.footer.gap_begin += wsize;
 
+		header_ptr->footer_off = tr->db->info.filesize;
 		if (write(tr->db->fd, tr->db->write_buf, wsize) != wsize) {
 			return TKVDB_IO_ERROR;
 		}
@@ -2315,7 +2323,7 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 
 	/* read root node of old transaction */
 	TKVDB_EXEC( tkvdb_node_read(vac,
-		tr->db->info.footer.gap_end,
+		tr->db->info.footer.gap_end + sizeof(struct tkvdb_tr_header),
 		&(vac->root)) );
 
 
