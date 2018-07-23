@@ -1,0 +1,17 @@
+digraph g
+{
+	graph [splines = true];
+	node [shape=record fontname="Arial"];
+
+	db [
+		label="{ Transaction 1| { <f0> root node| <f1> subnode 1 | <f2> subnode 2| ...| footer}}| \
+			{ Transaction 2| { <f3> root node| <f4> subnode 1 | ...| footer}}| \
+			{...}| \
+			{ Transaction N| { <f5> root node| <f6> subnode 1 | ...| footer}}"
+	];
+
+	db:f5 -> db:f2;
+	db:f5 -> db:f4;
+	db:f5 -> db:f6;
+}
+

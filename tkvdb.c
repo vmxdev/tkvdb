@@ -1583,7 +1583,7 @@ tkvdb_node_calc_disksize(tkvdb_memnode *node)
 
 /* commit and return new root offset */
 static TKVDB_RES
-tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
+tkvdb_do_commit(tkvdb_tr *tr, uint64_t *gap_end_ptr)
 {
 	size_t stack_depth = 0;
 	struct tkvdb_visit_helper stack[TKVDB_STACK_MAX_DEPTH];
@@ -1730,11 +1730,14 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 	header_ptr = (struct tkvdb_tr_header *)tr->db->write_buf;
 	header_ptr->type = TKVDB_BLOCKTYPE_TRANSACTION;
 	tr->db->info.footer.type = TKVDB_BLOCKTYPE_FOOTER;
+	if (gap_end_ptr) {
+		tr->db->info.footer.gap_end = *gap_end_ptr;
+	}
 	if (append) {
 		ssize_t wsize;
 		struct tkvdb_tr_footer *footer_ptr;
 
-		header_ptr->footer_off = node_off; /* FIXME: check */
+		header_ptr->footer_off = node_off;
 
 		wsize = tr->db->info.footer.transaction_size
 			+ TKVDB_TR_FTRSIZE;
@@ -1775,9 +1778,11 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *root_off)
 	r = TKVDB_OK;
 
 	/* return root offset */
+/*
 	if (root_off) {
 		*root_off = tr->db->info.footer.root_off;
 	}
+*/
 /*
 	if (sync && (fsync(tr->db->fd) < 0)) {
 		return TKVDB_IO_ERROR;
