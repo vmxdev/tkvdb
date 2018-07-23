@@ -20,13 +20,13 @@ tkvdb database file (in simplified append-only form) looks like:
 
 ![tkvdb database layout](docs/nonvac_db.png?raw=true "tkvdb database layout")
 
-Database file is a set of blocks - "Transactions" (probably not the best name for it).
-In each block there is a footer with pointer to current root node, signature and some additional DB file information.
-Each transaction is a small subtree (radix tree) which contains nodes of database that was changed in this transaction.
-Tree node may contain pointers (offsets in file) to other, unchanged nodes from previous transactions. Theese pointers remains unchanged in new subtree.
+A database file is a set of blocks - "Transactions" (probably not the best name for it).
+In each block, there is a footer with a pointer to a current root node, signature and some additional DB file information.
+Each transaction is a small subtree (radix tree) which contains nodes of the database that was changed in this transaction.
+Tree node may contain pointers (offsets in the file) to other, unchanged nodes from previous transactions. These pointers remain unchanged in a new subtree.
 
-So, to modify the database you need to open it, create transaction, make changes and "commit" (or "rollback").
-However, you may create transaction without underlying database file. In this case `tkvdb` will act as RAM-only database.
+So, to modify the database you need to open it, create a transaction, make changes and "commit" (or "rollback").
+However, you may create transaction without the underlying database file. In this case, `tkvdb` will act as the RAM-only database.
 Commits and rollbacks will just drop all the data and reset transaction to initial state.
 
 Here is a simple example:
@@ -54,10 +54,10 @@ tkvdb_close(db);                      /* close on-disk database */
 ## Searching in database and cursors
 
 Use `tkvdb_get()` if you need to get a value by key.
-On success it returns `TKVDB_OK` and pointer to data in memory and length.
-You can modify value "inplace" if length is not changed.
+On success, it returns `TKVDB_OK` and pointer to data in memory and length.
+You can modify the value "in place" if a length is not changed.
 
-If you need to iterate through database (or through a part of database) you may use cursors.
+If you need to iterate through the database (or through a part of the database) you may use cursors.
 
 ```
 tkvdb_cursor *cursor = tkvdb_cursor_create(transaction);
@@ -90,8 +90,8 @@ After seeking to key-value pair you can still use `tkvdb_next()` or `tkvdb_prev(
 
 By default nodes in transactions allocated when needed using system malloc().
 You may pre-allocate memory block for transaction using `tkvdb_tr_create_m(db, BLOCKSIZE_IN_BYTES, 0)`
-In this case allocations of nodes in tree becomes faster, but size of transaction becomes limited to fixed value.
-Functions will return `TKVDB_ENOMEM` if you have reached limit.
+In this case allocations of nodes in the tree becomes faster, but the size of the transaction becomes limited to a fixed value.
+Functions will return `TKVDB_ENOMEM` if you have reached a limit.
 
 
 ## Compiling and running test
