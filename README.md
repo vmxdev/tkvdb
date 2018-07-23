@@ -79,9 +79,9 @@ To iterate in reverse order use `tkvdb_last()` and `tkvdb_prev()`.
 
 If you want to search a key-value pair in database by prefix use `tkvdb_seek(cursor, &key, TKVDB_SEEK)`
 where `TKVDB_SEEK` can be:
-`TKVDB_SEEK_EQ` : search for the exact key match
-`TKVDB_SEEK_LE` : search for less (in terms of memcpy()) or equal key
-`TKVDB_SEEK_GE` : search for greater (in terms of memcpy()) or equal key
+  * `TKVDB_SEEK_EQ` : search for the exact key match
+  * `TKVDB_SEEK_LE` : search for less (in terms of memcpy()) or equal key
+  * `TKVDB_SEEK_GE` : search for greater (in terms of memcpy()) or equal key
 
 After seeking to key-value pair you can still use `tkvdb_next()` or `tkvdb_prev()`
 
@@ -93,6 +93,15 @@ You may pre-allocate memory block for transaction using `tkvdb_tr_create_m(db, B
 In this case allocations of nodes in the tree becomes faster, but the size of the transaction becomes limited to a fixed value.
 Functions will return `TKVDB_ENOMEM` if you have reached a limit.
 
+## Multithreading
+
+`tkvdb` does not use any OS-dependent synchronization mechanisms.
+You must explicitly lock transaction update operations.
+
+However, on some CPU's (at least on x32/x64) we can guarantee that `tkvdb_put()` will never put the in-memory transaction in inconsistent state.
+Updates of tree are lock-free and atomic.
+You can use one writer and multiple readers without locks.
+But be careful with `tkvdb_rollback()` and `tkvdb_commit()` - there is no such guarantees for theese functions, reading from transaction while resetting it can lead to unpredicatable consequences.
 
 ## Compiling and running test
 
