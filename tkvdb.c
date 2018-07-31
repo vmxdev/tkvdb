@@ -83,12 +83,21 @@ struct tkvdb_params
 	int tr_buf_dynalloc;    /* realloc transaction buffer when needed */
 };
 
+/* packed structures */
+#ifdef _WIN32
+#pragma pack (push, packing)
+#pragma pack (1)
+#define PACKED
+#else
+#define PACKED __attribute__((packed))
+#endif
+
 /* on-disk transaction header */
 struct tkvdb_tr_header
 {
 	uint8_t type;
 	uint64_t footer_off;       /* pointer to footer */
-} __attribute__((packed));
+} PACKED;
 
 /* on-disk transaction footer */
 struct tkvdb_tr_footer
@@ -101,9 +110,26 @@ struct tkvdb_tr_footer
 
 	uint64_t gap_begin;
 	uint64_t gap_end;
-} __attribute__((packed));
+} PACKED;
 
 #define TKVDB_TR_FTRSIZE (sizeof(struct tkvdb_tr_footer))
+
+/* on-disk node */
+struct tkvdb_disknode
+{
+	uint32_t size;        /* node size */
+	uint8_t type;         /* type (has value or metadata) */
+	uint16_t nsubnodes;   /* number of subnodes */
+	uint32_t prefix_size; /* prefix size */
+
+	uint8_t data[1];      /* variable size data */
+} PACKED;
+
+#ifdef _WIN32
+#pragma pack(pop, packing)
+#else
+#undef PACKED
+#endif
 
 /* database file information */
 struct tkvdb_db_info
@@ -124,18 +150,6 @@ struct tkvdb
 	uint8_t *write_buf;
 	size_t write_buf_allocated;
 };
-
-/* on-disk node */
-struct tkvdb_disknode
-{
-	uint32_t size;        /* node size */
-	uint8_t type;         /* type (has value or metadata) */
-	uint16_t nsubnodes;   /* number of subnodes */
-	uint32_t prefix_size; /* prefix size */
-
-	uint8_t data[1];      /* variable size data */
-} __attribute__((packed));
-
 
 /* node in memory */
 typedef struct tkvdb_memnode
@@ -290,8 +304,12 @@ tkvdb_params_init(tkvdb_params *params)
 	params->tr_buf_dynalloc = 1;
 	params->tr_buf_limit = SIZE_MAX;
 
-	params->flags = O_RDWR | O_CREAT;
 	params->mode = S_IRUSR | S_IWUSR;
+#ifndef _WIN32
+	params->flags = O_RDWR | O_CREAT;
+#else
+	params->flags = O_RDWR | O_CREAT | O_BINARY;
+#endif
 }
 
 /* open database file */
@@ -1581,9 +1599,9 @@ tkvdb_node_calc_disksize(tkvdb_memnode *node)
 		+ node->meta_size;
 }
 
-/* commit and return new root offset */
+/* commit */
 static TKVDB_RES
-tkvdb_do_commit(tkvdb_tr *tr, uint64_t *gap_end_ptr)
+tkvdb_do_commit(tkvdb_tr *tr, struct tkvdb_db_info *vacdbinfo)
 {
 	size_t stack_depth = 0;
 	struct tkvdb_visit_helper stack[TKVDB_STACK_MAX_DEPTH];
@@ -1596,8 +1614,8 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *gap_end_ptr)
 	uint64_t node_off;
 	/* size of last accessed node, will be added to node_off */
 	uint64_t last_node_size;
-	int append;
 	struct tkvdb_tr_header *header_ptr;
+	int append;
 
 	tkvdb_memnode *node;
 	int off = 0;
@@ -1730,8 +1748,9 @@ tkvdb_do_commit(tkvdb_tr *tr, uint64_t *gap_end_ptr)
 	header_ptr = (struct tkvdb_tr_header *)tr->db->write_buf;
 	header_ptr->type = TKVDB_BLOCKTYPE_TRANSACTION;
 	tr->db->info.footer.type = TKVDB_BLOCKTYPE_FOOTER;
-	if (gap_end_ptr) {
-		tr->db->info.footer.gap_end = *gap_end_ptr;
+	if (vacdbinfo) {
+		/* vacuum commit */
+		/*tr->db->info.footer.gap_end = *gap_end_ptr;*/
 	}
 	if (append) {
 		ssize_t wsize;
@@ -2306,6 +2325,7 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 	uint64_t root_off; /* offset of root after commit */
 	tkvdb_memnode *node;
 	TKVDB_RES r;
+	int append;
 
 	db = tr->db;
 	if (!db) {
@@ -2366,7 +2386,14 @@ tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres, tkvdb_cursor *c)
 			tr->db->info.footer.gap_end + trsize);
 	}
 
-	TKVDB_EXEC( tkvdb_do_commit(tres, &root_off) );
+	TKVDB_EXEC( tkvdb_do_commit(tres, &info) );
+
+#if 0
+	if (append) {
+		/* nothing to do */
+		return TKVDB_OK;
+	}
+#endif
 
 	/* FIXME: wrong! (DB header changed after commit) */
 	/* write new database footer */

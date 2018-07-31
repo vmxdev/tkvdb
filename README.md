@@ -32,6 +32,8 @@ Commits and rollbacks will just drop all the data and reset transaction to initi
 Here is a simple example:
 
 ```
+tkvdb_datum key, value;
+
 db = tkvdb_open("db.tkvdb", NULL);    /* optional, only if you need to keep data on disk */
 
 transaction = tkvdb_tr_create(db);    /* pass NULL here for RAM-only db */
@@ -60,6 +62,8 @@ You can modify the value "in place" if a length is not changed.
 If you need to iterate through the database (or through a part of the database) you may use cursors.
 
 ```
+TKVDB_RES rc;
+
 tkvdb_cursor *cursor = tkvdb_cursor_create(transaction);
 
 rc = tkvdb_first(cursor);                         /* position cursor to the first key-value pair of database */
@@ -72,7 +76,7 @@ while (rc == TKVDB_OK) {
 	rc = tkvdb_next(cursor);                  /* jump to next key-value pair */
 }
 
-tkvdb_cursor_free(cursor)
+tkvdb_cursor_free(cursor);
 ```
 
 To iterate in reverse order use `tkvdb_last()` and `tkvdb_prev()`.
