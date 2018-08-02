@@ -8,9 +8,6 @@
 typedef struct tkvdb tkvdb;
 typedef struct tkvdb_params tkvdb_params;
 
-typedef struct tkvdb_tr tkvdb_tr;
-typedef struct tkvdb_cursor tkvdb_cursor;
-
 typedef enum TKVDB_RES
 {
 	TKVDB_OK = 0,
@@ -31,56 +28,83 @@ typedef enum TKVDB_SEEK
 	TKVDB_SEEK_GE
 } TKVDB_SEEK;
 
+/* database (or transaction) parameters */
+typedef enum TKVDB_PARAM
+{
+	TKVDB_PARAM_TR_DYNALLOC,   /* dynamically allocate space for nodes */
+	TKVDB_PARAM_TR_LIMIT,      /* limit of transaction size (0 for none) */ 
+	TKVDB_PARAM_ALIGNVAL       /* align value in node (0 or 1 for none) */
+} TKVDB_PARAM;
+
 typedef struct tkvdb_datum
 {
 	void *data;
-	size_t len;
+	size_t size;
 } tkvdb_datum;
+
+typedef struct tkvdb_tr tkvdb_tr;
+
+struct tkvdb_tr
+{
+	TKVDB_RES (*begin)(tkvdb_tr *tr);
+	TKVDB_RES (*commit)(tkvdb_tr *tr);
+	TKVDB_RES (*rollback)(tkvdb_tr *tr);
+
+	TKVDB_RES (*put)(tkvdb_tr *tr,
+		const tkvdb_datum *key, const tkvdb_datum *val);
+	TKVDB_RES (*get)(tkvdb_tr *tr,
+		const tkvdb_datum *key, tkvdb_datum *val);
+	TKVDB_RES (*del)(tkvdb_tr *tr, const tkvdb_datum *key, int del_pfx);
+
+	void (*free)(tkvdb_tr *tr);
+
+	void *data;
+};
+
+typedef struct tkvdb_cursor tkvdb_cursor;
+struct tkvdb_cursor
+{
+	void *(*key)(tkvdb_cursor *c);
+	size_t (*keysize)(tkvdb_cursor *c);
+
+	void *(*val)(tkvdb_cursor *c);
+	size_t (*valsize)(tkvdb_cursor *c);
+
+	TKVDB_RES (*seek)(tkvdb_cursor *c,
+		const tkvdb_datum *key, TKVDB_SEEK seek);
+	TKVDB_RES (*first)(tkvdb_cursor *c);
+	TKVDB_RES (*last)(tkvdb_cursor *c);
+
+	TKVDB_RES (*next)(tkvdb_cursor *c);
+	TKVDB_RES (*prev)(tkvdb_cursor *c);
+
+	void (*free)(tkvdb_cursor *c);
+
+	void *data;
+};
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* fill db params with default values */
-void tkvdb_params_init(tkvdb_params *params);
+/* allocate and fill db params with default values */
+tkvdb_params *tkvdb_params_create(void);
+/* change parameter */
+void tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val);
+/* free */
+void tkvdb_params_free(tkvdb_params *params);
 
+/* database */
 tkvdb    *tkvdb_open(const char *path, tkvdb_params *params);
 TKVDB_RES tkvdb_close(tkvdb *db);
-
-/* in-memory transaction */
-tkvdb_tr *tkvdb_tr_create(tkvdb *db);
-/* create transaction with custom memory allocation parameters */
-tkvdb_tr *tkvdb_tr_create_m(tkvdb *db, size_t limit, int dynalloc);
-void tkvdb_tr_free(tkvdb_tr *tr);
-
-TKVDB_RES tkvdb_begin(tkvdb_tr *tr);
-TKVDB_RES tkvdb_commit(tkvdb_tr *tr);
-TKVDB_RES tkvdb_rollback(tkvdb_tr *tr);
-
 /* fsync() db file */
 TKVDB_RES tkvdb_sync(tkvdb *db);
 
-TKVDB_RES tkvdb_put(tkvdb_tr *tr,
-	const tkvdb_datum *key, const tkvdb_datum *val);
-TKVDB_RES tkvdb_del(tkvdb_tr *tr, const tkvdb_datum *key, int del_pfx);
-TKVDB_RES tkvdb_get(tkvdb_tr *tr, const tkvdb_datum *key, tkvdb_datum *val);
+/* in-memory transaction */
+tkvdb_tr *tkvdb_tr_create(tkvdb *db, tkvdb_params *params);
 
 /* cursors */
 tkvdb_cursor *tkvdb_cursor_create(tkvdb_tr *tr);
-TKVDB_RES tkvdb_cursor_free(tkvdb_cursor *c);
-
-void *tkvdb_cursor_key(tkvdb_cursor *c);
-size_t tkvdb_cursor_keysize(tkvdb_cursor *c);
-
-void *tkvdb_cursor_val(tkvdb_cursor *c);
-size_t tkvdb_cursor_valsize(tkvdb_cursor *c);
-
-TKVDB_RES tkvdb_seek(tkvdb_cursor *c, const tkvdb_datum *key, TKVDB_SEEK seek);
-TKVDB_RES tkvdb_first(tkvdb_cursor *c);
-TKVDB_RES tkvdb_last(tkvdb_cursor *c);
-
-TKVDB_RES tkvdb_next(tkvdb_cursor *c);
-TKVDB_RES tkvdb_prev(tkvdb_cursor *c);
 
 /* vacuum */
 TKVDB_RES tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres,
