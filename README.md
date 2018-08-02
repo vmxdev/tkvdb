@@ -55,7 +55,7 @@ tkvdb_close(db);                             /* close on-disk database */
 
 ## Searching in database and cursors
 
-Use `cursor->get()` if you need to get a value by key.
+Use `transaction->get()` if you need to get a value by key.
 On success, it returns `TKVDB_OK` and pointer to data in memory and length.
 You can modify the value "in place" if a length is not changed.
 
