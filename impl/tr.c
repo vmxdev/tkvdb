@@ -37,7 +37,7 @@ TKVDB_IMPL_TR_RESET(tkvdb_tr *trns)
 	tr->started = 0;
 }
 
-void
+static void
 TKVDB_IMPL_TR_FREE(tkvdb_tr *trns)
 {
 	tkvdb_tr_data *tr = trns->data;
@@ -49,9 +49,10 @@ TKVDB_IMPL_TR_FREE(tkvdb_tr *trns)
 	}
 
 	free(tr);
+	free(trns);
 }
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_ROLLBACK(tkvdb_tr *tr)
 {
 	TKVDB_IMPL_TR_RESET(tr);
@@ -372,7 +373,7 @@ fail_node_to_buf:
 	return r;
 }
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_COMMIT(tkvdb_tr *tr)
 {
 	return TKVDB_IMPL_DO_COMMIT(tr, NULL);

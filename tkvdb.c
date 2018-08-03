@@ -430,7 +430,6 @@ tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val)
 
 
 /* cursors */
-
 static void
 tkvdb_cursor_free(tkvdb_cursor *c)
 {
@@ -454,28 +453,28 @@ tkvdb_cursor_free(tkvdb_cursor *c)
 }
 
 
-void *
+static void *
 tkvdb_cursor_key(tkvdb_cursor *c)
 {
 	tkvdb_cursor_data *cdata = c->data;
 	return cdata->prefix;
 }
 
-size_t
+static size_t
 tkvdb_cursor_keysize(tkvdb_cursor *c)
 {
 	tkvdb_cursor_data *cdata = c->data;
 	return cdata->prefix_size;
 }
 
-void *
+static void *
 tkvdb_cursor_val(tkvdb_cursor *c)
 {
 	tkvdb_cursor_data *cdata = c->data;
 	return cdata->val;
 }
 
-size_t
+static size_t
 tkvdb_cursor_valsize(tkvdb_cursor *c)
 {
 	tkvdb_cursor_data *cdata = c->data;
@@ -812,14 +811,25 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 	/* setup functions */
 	tr->begin = &tkvdb_begin;
 
-	tr->commit = &tkvdb_commit_generic;
-	tr->rollback = &tkvdb_rollbacl_generic;
+	if (trdata->params.alignval) {
+		tr->commit = &tkvdb_commit_alignval;
+		tr->rollback = &tkvdb_rollbacl_alignval;
 
-	tr->put = &tkvdb_put_generic;
-	tr->get = &tkvdb_get_generic;
-	tr->del = &tkvdb_del_generic;
+		tr->put = &tkvdb_put_alignval;
+		tr->get = &tkvdb_get_alignval;
+		tr->del = &tkvdb_del_alignval;
 
-	tr->free = tkvdb_tr_free_generic;
+		tr->free = tkvdb_tr_free_alignval;
+	} else {
+		tr->commit = &tkvdb_commit_generic;
+		tr->rollback = &tkvdb_rollbacl_generic;
+
+		tr->put = &tkvdb_put_generic;
+		tr->get = &tkvdb_get_generic;
+		tr->del = &tkvdb_del_generic;
+
+		tr->free = tkvdb_tr_free_generic;
+	}
 
 	return tr;
 
@@ -837,6 +847,7 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 {
 	tkvdb_cursor *c;
 	tkvdb_cursor_data *cdata;
+	tkvdb_tr_data *trdata = tr->data;
 
 	c = malloc(sizeof(tkvdb_cursor));
 	if (!c) {
@@ -868,14 +879,24 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 	c->val = &tkvdb_cursor_val;
 	c->valsize = &tkvdb_cursor_valsize;
 
-	c->seek = &tkvdb_seek_generic;
-	c->first = &tkvdb_first_generic;
-	c->last = &tkvdb_last_generic;
-
-	c->next = &tkvdb_next_generic;
-	c->prev = &tkvdb_prev_generic;
-
 	c->free = &tkvdb_cursor_free;
+
+	if (trdata->params.alignval) {
+		c->seek = &tkvdb_seek_alignval;
+		c->first = &tkvdb_first_alignval;
+		c->last = &tkvdb_last_alignval;
+
+		c->next = &tkvdb_next_alignval;
+		c->prev = &tkvdb_prev_alignval;
+	} else {
+		c->seek = &tkvdb_seek_generic;
+		c->first = &tkvdb_first_generic;
+		c->last = &tkvdb_last_generic;
+
+		c->next = &tkvdb_next_generic;
+		c->prev = &tkvdb_prev_generic;
+	}
+
 
 	return c;
 }

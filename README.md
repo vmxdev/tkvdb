@@ -89,6 +89,31 @@ where `TKVDB_SEEK` can be:
 
 After seeking to key-value pair you can use `cursor->next()` or `cursor->prev()`
 
+## Database and transaction parameters
+
+You can tune some database or transaction parameters. Transaction parameters are inherited from database, but can be overridden.
+Here is an example:
+
+```
+tkvdb_params *params;
+
+params = tkvdb_params_create();
+tkvdb_param_set(params, TKVDB_PARAM_TR_DYNALLOC, 0);      /* don't use dynamic nodes allocation */
+tkvdb_param_set(params, TKVDB_PARAM_TR_LIMIT, 1024*1024); /* memory block of 1M will be used for transaction */
+
+db = tkvdb_open("db.tkvdb", params);
+transaction1 = tkvdb_tr_create(db, NULL);                  /* transactions of parent db will use theese parameters */
+
+/* and you can override parameters for some transactions with different values */
+tkvdb_param_set(params, TKVDB_PARAM_TR_LIMIT, 1024*1024*10);
+transaction2 = tkvdb_tr_create(db, params);
+
+/* or use with RAM-only transaction */
+transaction3 = tkvdb_tr_create(NULL, params);
+
+tkvdb_params_free(params);
+
+```
 
 ## Multithreading
 

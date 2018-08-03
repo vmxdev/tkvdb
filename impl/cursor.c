@@ -219,7 +219,7 @@ TKVDB_IMPL_CURSOR_LOAD_ROOT(tkvdb_cursor *cr)
 	return TKVDB_OK;
 }
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_FIRST(tkvdb_cursor *cr)
 {
 	tkvdb_cursor_data *c = cr->data;
@@ -230,7 +230,7 @@ TKVDB_IMPL_FIRST(tkvdb_cursor *cr)
 	return TKVDB_IMPL_SMALLEST(cr, tr->root);
 }
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_LAST(tkvdb_cursor *cr)
 {
 	tkvdb_cursor_data *c = cr->data;
@@ -241,7 +241,7 @@ TKVDB_IMPL_LAST(tkvdb_cursor *cr)
 	return TKVDB_IMPL_BIGGEST(cr, tr->root);
 }
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_NEXT(tkvdb_cursor *cr)
 {
 	int *off;
@@ -281,7 +281,7 @@ TKVDB_IMPL_NEXT(tkvdb_cursor *cr)
 	return TKVDB_NOT_FOUND;
 }
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_PREV(tkvdb_cursor *cr)
 {
 	int *off;
@@ -328,7 +328,7 @@ TKVDB_IMPL_PREV(tkvdb_cursor *cr)
 }
 
 /* seek to key (or to nearest key, less or greater) */
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_SEEK(tkvdb_cursor *cr, const tkvdb_datum *key, TKVDB_SEEK seek)
 {
 	TKVDB_MEMNODE_TYPE *node, *next;

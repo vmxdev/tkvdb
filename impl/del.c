@@ -134,7 +134,7 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 	return TKVDB_OK;
 }
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_DEL(tkvdb_tr *trns, const tkvdb_datum *key, int del_pfx)
 {
 	const unsigned char *sym;

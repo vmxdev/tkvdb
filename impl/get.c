@@ -16,7 +16,7 @@
 
 /* get value for given key */
 
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 {
 	const unsigned char *sym;

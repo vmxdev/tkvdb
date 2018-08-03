@@ -17,7 +17,7 @@
  */
 
 /* add key-value pair to memory transaction */
-TKVDB_RES
+static TKVDB_RES
 TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 {
 	const unsigned char *sym;  /* pointer to current symbol in key */
