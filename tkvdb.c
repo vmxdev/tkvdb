@@ -409,6 +409,26 @@ tkvdb_close(tkvdb *db)
 }
 
 
+tkvdb_params *
+tkvdb_params_create(void)
+{
+	tkvdb_params *params;
+
+	params = malloc(sizeof(tkvdb_params));
+	if (!params) {
+		return NULL;
+	}
+
+	tkvdb_params_init(params);
+
+	return params;
+}
+
+void
+tkvdb_params_free(tkvdb_params *params)
+{
+	free(params);
+}
 
 void
 tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val)
