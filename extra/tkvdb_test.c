@@ -10,8 +10,8 @@
 #include "tkvdb.h"
 
 static void test_init();
-#define CUTEST_INIT__ test_init()
-#include "cutest.h"
+#define ACUTEST_INIT__ test_init()
+#include "acutest.h"
 
 #define KLEN 100
 #define VLEN 100
