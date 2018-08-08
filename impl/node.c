@@ -22,7 +22,7 @@
  * memory block is taken from system using malloc()
  * when 'tr->tr_buf_dynalloc' is true
  * or from preallocated buffer
- * preallocation occurs in tkvdb_tr_create_m() */
+ * preallocation occurs in tkvdb_tr_create() */
 static TKVDB_MEMNODE_TYPE *
 TKVDB_IMPL_NODE_ALLOC(tkvdb_tr *trns, size_t node_size)
 {

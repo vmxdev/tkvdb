@@ -78,7 +78,7 @@ TKVDB_IMPL_CURSOR_APPEND(tkvdb_cursor *cr, uint8_t *str, size_t n)
 }
 
 static TKVDB_RES
-TKVDB_IMPL_CURSOR_APPENDSYM(tkvdb_cursor *cr, int sym)
+TKVDB_IMPL_CURSOR_APPEND_SYM(tkvdb_cursor *cr, int sym)
 {
 	tkvdb_cursor_data *c = cr->data;
 
@@ -380,7 +380,7 @@ next_byte:
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND(cr,
 				node->prefix_val_meta, node->prefix_size) );
 
-			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPENDSYM(cr, *sym) );
+			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND_SYM(cr, *sym) );
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, *sym) );
 
 			node = next;
@@ -398,7 +398,7 @@ next_byte:
 			TKVDB_SUBNODE_SEARCH(c->tr, node, next, off, 0);
 			if (next) {
 				TKVDB_EXEC (
-					TKVDB_IMPL_CURSOR_APPENDSYM(cr, off)
+					TKVDB_IMPL_CURSOR_APPEND_SYM(cr, off)
 				);
 				TKVDB_EXEC (
 					TKVDB_IMPL_CURSOR_PUSH(cr, node, off)
@@ -415,7 +415,7 @@ next_byte:
 			TKVDB_SUBNODE_SEARCH(c->tr, node, next, off, 1);
 			if (next) {
 				TKVDB_EXEC (
-					TKVDB_IMPL_CURSOR_APPENDSYM(cr, off)
+					TKVDB_IMPL_CURSOR_APPEND_SYM(cr, off)
 				);
 				TKVDB_EXEC (
 					TKVDB_IMPL_CURSOR_PUSH(cr, node, off)
