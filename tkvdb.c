@@ -153,47 +153,6 @@ struct tkvdb
 	size_t write_buf_allocated;
 };
 
-/* node in memory */
-typedef struct tkvdb_memnode_generic
-{
-	int type;
-	size_t prefix_size;
-	size_t val_size;
-	size_t meta_size;
-
-	uint64_t disk_size;               /* size of node on disk */
-	uint64_t disk_off;                /* offset of node on disk */
-	unsigned int nsubnodes;           /* number of subnodes */
-
-	struct tkvdb_memnode_generic *replaced_by;
-
-	/* subnodes in memory */
-	struct tkvdb_memnode_generic *next[256];
-	uint64_t fnext[256];              /* positions of subnodes in file */
-
-	unsigned char prefix_val_meta[1]; /* prefix, value and metadata */
-} tkvdb_memnode_generic;
-
-typedef struct tkvdb_memnode_alignval
-{
-	int type;
-	size_t prefix_size;
-	size_t val_size;
-	size_t meta_size;
-	void *val_ptr;                    /* pointer to aligned val */
-
-	uint64_t disk_size;               /* size of node on disk */
-	uint64_t disk_off;                /* offset of node on disk */
-	unsigned int nsubnodes;           /* number of subnodes */
-
-	struct tkvdb_memnode_alignval *replaced_by;
-
-	struct tkvdb_memnode_alignval *next[256];
-	uint64_t fnext[256];              /* positions of subnodes in file */
-
-	unsigned char prefix_val_meta[1]; /* prefix, value and metadata */
-} tkvdb_memnode_alignval;
-
 /* transaction in memory */
 typedef struct tkvdb_tr_data
 {
@@ -213,7 +172,6 @@ struct tkvdb_visit_helper
 {
 	void *node;             /* pointer to memnode */
 	int off;                /* index of subnode in node */
-
 };
 
 /* database cursor */

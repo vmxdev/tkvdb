@@ -55,6 +55,7 @@ static const char *funcs[] = {
 };
 
 static const char *incs[] = {
+	"impl/memnode.h",
 	"impl/node.c",
 	"impl/put.c",
 	"impl/get.c",

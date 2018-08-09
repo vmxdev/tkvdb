@@ -28,6 +28,7 @@
 #define TKVDB_IMPL_COMMIT tkvdb_commit_alignval
 #define TKVDB_IMPL_DO_DEL tkvdb_do_del_alignval
 #define TKVDB_IMPL_DEL tkvdb_del_alignval
+#include "impl/memnode.h"
 #include "impl/node.c"
 #include "impl/put.c"
 #include "impl/get.c"
@@ -96,6 +97,7 @@
 #define TKVDB_IMPL_COMMIT tkvdb_commit_generic
 #define TKVDB_IMPL_DO_DEL tkvdb_do_del_generic
 #define TKVDB_IMPL_DEL tkvdb_del_generic
+#include "impl/memnode.h"
 #include "impl/node.c"
 #include "impl/put.c"
 #include "impl/get.c"
