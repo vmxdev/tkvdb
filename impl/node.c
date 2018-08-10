@@ -29,26 +29,41 @@ TKVDB_IMPL_NODE_ALLOC(tkvdb_tr *trns, size_t node_size)
 	TKVDB_MEMNODE_TYPE *node;
 	tkvdb_tr_data *tr = trns->data;
 
-	if ((tr->tr_buf_allocated + node_size) > tr->params.tr_buf_limit) {
-		/* memory limit exceeded */
-		return NULL;
-	}
-
 	if (tr->params.tr_buf_dynalloc) {
+		/* allocate node using system malloc() */
+		if ((tr->tr_buf_allocated + node_size)
+			> tr->params.tr_buf_limit) {
+
+			/* memory limit exceeded */
+			return NULL;
+		}
+
 		node = malloc(node_size);
 		if (!node) {
 			return NULL;
 		}
 	} else {
-		/* FIXME: don't hardcode! check space! */
+		uint8_t *buf_ptr;
+		/* FIXME: don't hardcode! */
 		/* align to 16-byte boundary */
-		tr->tr_buf_ptr = (uint8_t *)
+		buf_ptr = (uint8_t *)
 			((uintptr_t)(tr->tr_buf_ptr + 16 - 1) & (-16));
-		node = (TKVDB_MEMNODE_TYPE *)tr->tr_buf_ptr;
+
+		/* calculate node size with alignment */
+		node_size += buf_ptr - tr->tr_buf_ptr;
+
+		if ((tr->tr_buf_allocated + node_size)
+			> tr->params.tr_buf_limit) {
+
+			/* memory limit exceeded */
+			return NULL;
+		}
+		node = (TKVDB_MEMNODE_TYPE *)buf_ptr;
 		tr->tr_buf_ptr += node_size;
 	}
 
 	tr->tr_buf_allocated += node_size;
+
 	return node;
 }
 
