@@ -60,15 +60,15 @@ do {                                       \
 
 /* skip replaced nodes */
 #define TKVDB_SKIP_RNODES(NODE)            \
-while (NODE->replaced_by) {                \
-	NODE = NODE->replaced_by;          \
+while (NODE->c.replaced_by) {              \
+	NODE = NODE->c.replaced_by;        \
 } while (0)
 
 /* replace node with updated one */
 /* FIXME: (optional) memory barrier? */
 #define TKVDB_REPLACE_NODE(NODE, NEWNODE)  \
 do {                                       \
-	NODE->replaced_by = NEWNODE;       \
+	NODE->c.replaced_by = NEWNODE;     \
 } while (0)
 
 struct tkvdb_params

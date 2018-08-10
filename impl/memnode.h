@@ -18,9 +18,12 @@
 
 
 /* node in memory */
-typedef struct TKVDB_MEMNODE_TYPE
+typedef struct TKVDB_MEMNODE_TYPE_COMMON
 {
 	int type;
+
+	struct TKVDB_MEMNODE_TYPE *replaced_by;
+
 	size_t prefix_size;
 	size_t val_size;
 	size_t meta_size;
@@ -32,13 +35,25 @@ typedef struct TKVDB_MEMNODE_TYPE
 	uint64_t disk_size;               /* size of node on disk */
 	uint64_t disk_off;                /* offset of node on disk */
 	unsigned int nsubnodes;           /* number of subnodes */
+} TKVDB_MEMNODE_TYPE_COMMON;
 
-	struct TKVDB_MEMNODE_TYPE *replaced_by;
+typedef struct TKVDB_MEMNODE_TYPE
+{
+	TKVDB_MEMNODE_TYPE_COMMON c;
 
 	/* subnodes in memory */
-	struct TKVDB_MEMNODE_TYPE *next[256];
-	uint64_t fnext[256];              /* positions of subnodes in file */
+	void *next[256];
+	/* positions of subnodes in file */
+	uint64_t fnext[256];
 
 	unsigned char prefix_val_meta[1]; /* prefix, value and metadata */
 } TKVDB_MEMNODE_TYPE;
+
+/* no subnodes in leaf */
+typedef struct TKVDB_MEMNODE_TYPE_LEAF
+{
+	TKVDB_MEMNODE_TYPE_COMMON c;
+
+	unsigned char prefix_val_meta[1]; /* prefix, value and metadata */
+} TKVDB_MEMNODE_TYPE_LEAF;
 

@@ -81,24 +81,24 @@ TKVDB_IMPL_NODE_NEW(tkvdb_tr *tr, int type, size_t prefix_size,
 		return NULL;
 	}
 
-	node->type = type;
-	node->prefix_size = prefix_size;
-	node->val_size = vlen;
-	node->meta_size = 0;
-	node->replaced_by = NULL;
-	if (node->prefix_size > 0) {
-		memcpy(node->prefix_val_meta, prefix, node->prefix_size);
+	node->c.type = type;
+	node->c.prefix_size = prefix_size;
+	node->c.val_size = vlen;
+	node->c.meta_size = 0;
+	node->c.replaced_by = NULL;
+	if (node->c.prefix_size > 0) {
+		memcpy(node->prefix_val_meta, prefix, node->c.prefix_size);
 	}
-	if (node->val_size > 0) {
-		memcpy(node->prefix_val_meta + node->prefix_size,
-			val, node->val_size);
+	if (node->c.val_size > 0) {
+		memcpy(node->prefix_val_meta + node->c.prefix_size,
+			val, node->c.val_size);
 	}
 
 	memset(node->next, 0, sizeof(TKVDB_MEMNODE_TYPE *) * 256);
 	memset(node->fnext, 0, sizeof(uint64_t) * 256);
 
-	node->disk_size = 0;
-	node->disk_off = 0;
+	node->c.disk_size = 0;
+	node->c.disk_off = 0;
 
 	return node;
 }
@@ -168,23 +168,23 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 		return TKVDB_ENOMEM;
 	}
 
-	(*node_ptr)->replaced_by = NULL;
+	(*node_ptr)->c.replaced_by = NULL;
 	/* now fill memnode with values from disk node */
-	(*node_ptr)->type = disknode->type;
-	(*node_ptr)->prefix_size = disknode->prefix_size;
+	(*node_ptr)->c.type = disknode->type;
+	(*node_ptr)->c.prefix_size = disknode->prefix_size;
 
-	(*node_ptr)->disk_size = 0;
-	(*node_ptr)->disk_off = 0;
+	(*node_ptr)->c.disk_size = 0;
+	(*node_ptr)->c.disk_off = 0;
 
 	ptr = disknode->data;
 
-	(*node_ptr)->val_size = (*node_ptr)->meta_size = 0;
+	(*node_ptr)->c.val_size = (*node_ptr)->c.meta_size = 0;
 	if (disknode->type & TKVDB_NODE_VAL) {
-		(*node_ptr)->val_size = *((uint32_t *)ptr);
+		(*node_ptr)->c.val_size = *((uint32_t *)ptr);
 		ptr += sizeof(uint32_t);
 	}
 	if (disknode->type & TKVDB_NODE_META) {
-		(*node_ptr)->meta_size = *((uint32_t *)ptr);
+		(*node_ptr)->c.meta_size = *((uint32_t *)ptr);
 		ptr += sizeof(uint32_t);
 	}
 
@@ -237,8 +237,8 @@ TKVDB_IMPL_NODE_FREE(TKVDB_MEMNODE_TYPE *node)
 	int off = 0;
 
 	for (;;) {
-		if (node->replaced_by) {
-			next = node->replaced_by;
+		if (node->c.replaced_by) {
+			next = node->c.replaced_by;
 			free(node);
 			node = next;
 			continue;

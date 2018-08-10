@@ -70,29 +70,31 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 	uint8_t *ptr;
 	uint64_t iobuf_off;
 
-	iobuf_off = node->disk_off - transaction_off;
+	iobuf_off = node->c.disk_off - transaction_off;
 
-	TKVDB_EXEC( tkvdb_writebuf_realloc(db, iobuf_off + node->disk_size) );
+	TKVDB_EXEC(
+		tkvdb_writebuf_realloc(db, iobuf_off + node->c.disk_size)
+	);
 
 	disknode = (struct tkvdb_disknode *)(db->write_buf + iobuf_off);
 
-	disknode->size = node->disk_size;
-	disknode->type = node->type;
-	disknode->nsubnodes = node->nsubnodes;
-	disknode->prefix_size = node->prefix_size;
+	disknode->size = node->c.disk_size;
+	disknode->type = node->c.type;
+	disknode->nsubnodes = node->c.nsubnodes;
+	disknode->prefix_size = node->c.prefix_size;
 
 	ptr = disknode->data;
 
-	if (node->type & TKVDB_NODE_VAL) {
-		*((uint32_t *)ptr) = node->val_size;
+	if (node->c.type & TKVDB_NODE_VAL) {
+		*((uint32_t *)ptr) = node->c.val_size;
 		ptr += sizeof(uint32_t);
 	}
-	if (node->type & TKVDB_NODE_META) {
-		*((uint32_t *)ptr) = node->meta_size;
+	if (node->c.type & TKVDB_NODE_META) {
+		*((uint32_t *)ptr) = node->c.meta_size;
 		ptr += sizeof(uint32_t);
 	}
 
-	if (node->nsubnodes > TKVDB_SUBNODES_THR) {
+	if (node->c.nsubnodes > TKVDB_SUBNODES_THR) {
 		memcpy(ptr, node->fnext, sizeof(uint64_t) * 256);
 		ptr += sizeof(uint64_t) * 256;
 	} else {
@@ -101,7 +103,7 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 
 		/* array of next symbols */
 		symbols = ptr;
-		ptr += node->nsubnodes * sizeof(uint8_t);
+		ptr += node->c.nsubnodes * sizeof(uint8_t);
 		for (i=0; i<256; i++) {
 			if (node->fnext[i]) {
 				*symbols = i;
@@ -113,8 +115,8 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 		}
 	}
 
-	memcpy(ptr, node->prefix_val_meta, node->prefix_size + node->val_size
-		+ node->meta_size);
+	memcpy(ptr, node->prefix_val_meta,
+		node->c.prefix_size + node->c.val_size + node->c.meta_size);
 
 	return TKVDB_OK;
 }
@@ -125,36 +127,36 @@ TKVDB_IMPL_NODE_CALC_DISKSIZE(TKVDB_MEMNODE_TYPE *node)
 {
 	unsigned int i;
 
-	node->nsubnodes = 0;
+	node->c.nsubnodes = 0;
 
 	for (i=0; i<256; i++) {
 		if (node->next[i] || node->fnext[i]) {
-			node->nsubnodes++;
+			node->c.nsubnodes++;
 		}
 	}
 
-	node->disk_size = sizeof(struct tkvdb_disknode) - 1;
+	node->c.disk_size = sizeof(struct tkvdb_disknode) - 1;
 
 	/* if node has value add 4 bytes for value size */
-	if (node->type & TKVDB_NODE_VAL) {
-		node->disk_size += sizeof(uint32_t);
+	if (node->c.type & TKVDB_NODE_VAL) {
+		node->c.disk_size += sizeof(uint32_t);
 	}
 	/* 4 bytes for metadata size */
-	if (node->type & TKVDB_NODE_META) {
-		node->disk_size += sizeof(uint32_t);
+	if (node->c.type & TKVDB_NODE_META) {
+		node->c.disk_size += sizeof(uint32_t);
 	}
 
 	/* subnodes */
-	if (node->nsubnodes > TKVDB_SUBNODES_THR) {
-		node->disk_size += 256 * sizeof(uint64_t);
+	if (node->c.nsubnodes > TKVDB_SUBNODES_THR) {
+		node->c.disk_size += 256 * sizeof(uint64_t);
 	} else {
-		node->disk_size += node->nsubnodes * sizeof(uint8_t)
-			+ node->nsubnodes * sizeof(uint64_t);
+		node->c.disk_size += node->c.nsubnodes * sizeof(uint8_t)
+			+ node->c.nsubnodes * sizeof(uint64_t);
 	}
 
 	/* prefix + value + metadata */
-	node->disk_size += node->prefix_size + node->val_size
-		+ node->meta_size;
+	node->c.disk_size += node->c.prefix_size + node->c.val_size
+		+ node->c.meta_size;
 }
 
 /* commit */
@@ -244,11 +246,11 @@ TKVDB_IMPL_DO_COMMIT(tkvdb_tr *trns, struct tkvdb_db_info *vacdbinfo)
 
 		TKVDB_SKIP_RNODES(node);
 
-		if (node->disk_size == 0) {
+		if (node->c.disk_size == 0) {
 			TKVDB_IMPL_NODE_CALC_DISKSIZE(node);
 
-			node->disk_off = node_off;
-			last_node_size = node->disk_size;
+			node->c.disk_off = node_off;
+			last_node_size = node->c.disk_size;
 		}
 
 		next = NULL;

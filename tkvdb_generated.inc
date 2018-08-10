@@ -1,4 +1,6 @@
 #define TKVDB_MEMNODE_TYPE tkvdb_memnode_alignval
+#define TKVDB_MEMNODE_TYPE_COMMON tkvdb_memnode_alignval_common
+#define TKVDB_MEMNODE_TYPE_LEAF tkvdb_memnode_alignval_leaf
 #define TKVDB_IMPL_PUT tkvdb_put_alignval
 #define TKVDB_IMPL_GET tkvdb_get_alignval
 #define TKVDB_IMPL_CURSOR_PUSH tkvdb_cursor_push_alignval
@@ -65,9 +67,13 @@
 #undef TKVDB_IMPL_DO_DEL
 #undef TKVDB_IMPL_DEL
 #undef TKVDB_MEMNODE_TYPE
+#undef TKVDB_MEMNODE_TYPE_COMMON
+#undef TKVDB_MEMNODE_TYPE_LEAF
 
 
 #define TKVDB_MEMNODE_TYPE tkvdb_memnode_generic
+#define TKVDB_MEMNODE_TYPE_COMMON tkvdb_memnode_generic_common
+#define TKVDB_MEMNODE_TYPE_LEAF tkvdb_memnode_generic_leaf
 #define TKVDB_IMPL_PUT tkvdb_put_generic
 #define TKVDB_IMPL_GET tkvdb_get_generic
 #define TKVDB_IMPL_CURSOR_PUSH tkvdb_cursor_push_generic
@@ -134,5 +140,7 @@
 #undef TKVDB_IMPL_DO_DEL
 #undef TKVDB_IMPL_DEL
 #undef TKVDB_MEMNODE_TYPE
+#undef TKVDB_MEMNODE_TYPE_COMMON
+#undef TKVDB_MEMNODE_TYPE_LEAF
 
 

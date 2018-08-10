@@ -67,14 +67,14 @@ next_byte:
 	if (sym >= ((unsigned char *)key->data + key->size)) {
 		TKVDB_MEMNODE_TYPE *newroot, *subnode_rest;
 
-		if (pi == node->prefix_size) {
+		if (pi == node->c.prefix_size) {
 			/* exact match */
-			if ((node->val_size == val->size)
+			if ((node->c.val_size == val->size)
 				&& (val->size != 0)) {
 				/* same value size, so copy new value and
 					return */
 				memcpy(node->prefix_val_meta
-					+ node->prefix_size,
+					+ node->c.prefix_size,
 					val->data, val->size);
 				return TKVDB_OK;
 			}
@@ -104,11 +104,11 @@ next_byte:
 			val->size, val->data);
 		if (!newroot) return TKVDB_ENOMEM;
 
-		subnode_rest = TKVDB_IMPL_NODE_NEW(trns, node->type,
-			node->prefix_size - pi - 1,
+		subnode_rest = TKVDB_IMPL_NODE_NEW(trns, node->c.type,
+			node->c.prefix_size - pi - 1,
 			node->prefix_val_meta + pi + 1,
-			node->val_size,
-			node->prefix_val_meta + node->prefix_size);
+			node->c.val_size,
+			node->prefix_val_meta + node->c.prefix_size);
 
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
@@ -133,7 +133,7 @@ next_byte:
   [p][r][e][f][i][x]
   next['n'] => [e][w] - tail
 */
-	if (pi >= node->prefix_size) {
+	if (pi >= node->c.prefix_size) {
 		if (node->next[*sym] != NULL) {
 			/* continue with next node */
 			node = node->next[*sym];
@@ -183,11 +183,11 @@ next_byte:
 		if (!newroot) return TKVDB_ENOMEM;
 
 		/* rest of prefix (skip current symbol) */
-		subnode_rest = TKVDB_IMPL_NODE_NEW(trns, node->type,
-			node->prefix_size - pi - 1,
+		subnode_rest = TKVDB_IMPL_NODE_NEW(trns, node->c.type,
+			node->c.prefix_size - pi - 1,
 			node->prefix_val_meta + pi + 1,
-			node->val_size,
-			node->prefix_val_meta + node->prefix_size);
+			node->c.val_size,
+			node->prefix_val_meta + node->c.prefix_size);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);

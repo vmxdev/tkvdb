@@ -53,18 +53,19 @@ next_byte:
 
 	if (sym >= ((unsigned char *)key->data + key->size)) {
 		/* end of key */
-		if ((pi == node->prefix_size)
-			&& (node->type & TKVDB_NODE_VAL)) {
+		if ((pi == node->c.prefix_size)
+			&& (node->c.type & TKVDB_NODE_VAL)) {
 			/* exact match and node with value */
-			val->size = node->val_size;
-			val->data = node->prefix_val_meta + node->prefix_size;
+			val->size = node->c.val_size;
+			val->data = node->prefix_val_meta
+				+ node->c.prefix_size;
 			return TKVDB_OK;
 		} else {
 			return TKVDB_NOT_FOUND;
 		}
 	}
 
-	if (pi >= node->prefix_size) {
+	if (pi >= node->c.prefix_size) {
 		/* end of prefix */
 		if (node->next[*sym] != NULL) {
 			/* continue with next node */

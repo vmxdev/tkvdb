@@ -87,6 +87,10 @@ print_block(const char *name)
 
 	printf("#define TKVDB_MEMNODE_TYPE tkvdb_memnode_%s\n",
 		name);
+	printf("#define TKVDB_MEMNODE_TYPE_COMMON tkvdb_memnode_%s_common\n",
+		name);
+	printf("#define TKVDB_MEMNODE_TYPE_LEAF tkvdb_memnode_%s_leaf\n",
+		name);
 	for (i=0; funcs[i]; i++) {
 		func = funcs[i];
 		func_upper = str2upper(func);
@@ -105,7 +109,9 @@ print_block(const char *name)
 		printf("#undef TKVDB_IMPL_%s\n", func_upper);
 		free(func_upper);
 	}
-	printf("#undef TKVDB_MEMNODE_TYPE\n\n\n");
+	printf("#undef TKVDB_MEMNODE_TYPE\n");
+	printf("#undef TKVDB_MEMNODE_TYPE_COMMON\n");
+	printf("#undef TKVDB_MEMNODE_TYPE_LEAF\n\n\n");
 }
 
 int
