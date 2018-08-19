@@ -94,29 +94,40 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 		ptr += sizeof(uint32_t);
 	}
 
-	if (node->c.nsubnodes > TKVDB_SUBNODES_THR) {
-		memcpy(ptr, node->fnext, sizeof(uint64_t) * 256);
-		ptr += sizeof(uint64_t) * 256;
+	if (node->c.type & TKVDB_NODE_LEAF) {
+		TKVDB_MEMNODE_TYPE_LEAF *node_leaf;
+		node_leaf = (TKVDB_MEMNODE_TYPE_LEAF *)node;
+		memcpy(ptr, node_leaf->prefix_val_meta,
+			node->c.prefix_size
+			+ node->c.val_size
+			+ node->c.meta_size);
 	} else {
-		int i;
-		uint8_t *symbols;
+		if (node->c.nsubnodes > TKVDB_SUBNODES_THR) {
+			memcpy(ptr, node->fnext, sizeof(uint64_t) * 256);
+			ptr += sizeof(uint64_t) * 256;
+		} else {
+			int i;
+			uint8_t *symbols;
 
-		/* array of next symbols */
-		symbols = ptr;
-		ptr += node->c.nsubnodes * sizeof(uint8_t);
-		for (i=0; i<256; i++) {
-			if (node->fnext[i]) {
-				*symbols = i;
-				symbols++;
+			/* array of next symbols */
+			symbols = ptr;
+			ptr += node->c.nsubnodes * sizeof(uint8_t);
+			for (i=0; i<256; i++) {
+				if (node->fnext[i]) {
+					*symbols = i;
+					symbols++;
 
-				*((uint64_t *)ptr) = node->fnext[i];
-				ptr += sizeof(uint64_t);
+					*((uint64_t *)ptr) = node->fnext[i];
+					ptr += sizeof(uint64_t);
+				}
 			}
 		}
+		memcpy(ptr, node->prefix_val_meta,
+			node->c.prefix_size
+			+ node->c.val_size
+			+ node->c.meta_size);
 	}
 
-	memcpy(ptr, node->prefix_val_meta,
-		node->c.prefix_size + node->c.val_size + node->c.meta_size);
 
 	return TKVDB_OK;
 }
@@ -129,9 +140,11 @@ TKVDB_IMPL_NODE_CALC_DISKSIZE(TKVDB_MEMNODE_TYPE *node)
 
 	node->c.nsubnodes = 0;
 
-	for (i=0; i<256; i++) {
-		if (node->next[i] || node->fnext[i]) {
-			node->c.nsubnodes++;
+	if (!(node->c.type & TKVDB_NODE_LEAF)) {
+		for (i=0; i<256; i++) {
+			if (node->next[i] || node->fnext[i]) {
+				node->c.nsubnodes++;
+			}
 		}
 	}
 
@@ -254,11 +267,14 @@ TKVDB_IMPL_DO_COMMIT(tkvdb_tr *trns, struct tkvdb_db_info *vacdbinfo)
 		}
 
 		next = NULL;
-		for (; off<256; off++) {
-			if (node->next[off]) {
-				/* found next subnode */
-				next = node->next[off];
-				break;
+		if (!(node->c.type & TKVDB_NODE_LEAF)) {
+			/* non-leaf node */
+			for (; off<256; off++) {
+				if (node->next[off]) {
+					/* found next subnode */
+					next = node->next[off];
+					break;
+				}
 			}
 		}
 

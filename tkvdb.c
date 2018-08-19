@@ -37,6 +37,7 @@
 /* node properties */
 #define TKVDB_NODE_VAL  (1 << 0)
 #define TKVDB_NODE_META (1 << 1)
+#define TKVDB_NODE_LEAF (1 << 2)
 
 /* max number of subnodes we store as [symbols array] => [offsets array]
  * if number of subnodes is more than TKVDB_SUBNODES_THR, they stored on disk
@@ -193,6 +194,9 @@ typedef struct tkvdb_cursor_data
 #define TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF)                           \
 do {                                                                      \
 	tkvdb_tr_data *trd = TR->data;                                    \
+	if (NODE->c.type & TKVDB_NODE_LEAF) {                             \
+		break;                                                    \
+	}                                                                 \
 	if (NODE->next[OFF]) {                                            \
 		NEXT = node->next[OFF];                                   \
 	} else if (trd->db && NODE->fnext[OFF]) {                         \
@@ -204,23 +208,26 @@ do {                                                                      \
 	}                                                                 \
 } while (0)
 
-#define TKVDB_SUBNODE_SEARCH(TR, NODE, NEXT, OFF, INCR)   \
-do {                                                      \
-	int lim, step;                                    \
-	NEXT = NULL;                                      \
-	if (INCR) {                                       \
-		lim = 256;                                \
-		step = 1;                                 \
-	} else {                                          \
-		lim = -1;                                 \
-		step = -1;                                \
-	}                                                 \
-	for (; OFF!=lim; OFF+=step) {                     \
-		TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF);  \
-		if (next) {                               \
-			break;                            \
-		}                                         \
-	}                                                 \
+#define TKVDB_SUBNODE_SEARCH(TR, NODE, NEXT, OFF, INCR)                   \
+do {                                                                      \
+	int lim, step;                                                    \
+	NEXT = NULL;                                                      \
+	if (NODE->c.type & TKVDB_NODE_LEAF) {                             \
+		break;                                                    \
+	}                                                                 \
+	if (INCR) {                                                       \
+		lim = 256;                                                \
+		step = 1;                                                 \
+	} else {                                                          \
+		lim = -1;                                                 \
+		step = -1;                                                \
+	}                                                                 \
+	for (; OFF!=lim; OFF+=step) {                                     \
+		TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF);                  \
+		if (next) {                                               \
+			break;                                            \
+		}                                                         \
+	}                                                                 \
 } while (0)
 
 

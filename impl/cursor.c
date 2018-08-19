@@ -30,7 +30,12 @@ TKVDB_IMPL_CURSOR_PUSH(tkvdb_cursor *cr, TKVDB_MEMNODE_TYPE *node, int off)
 	c->stack_size++;
 
 	c->val_size = node->c.val_size;
-	c->val = node->prefix_val_meta + node->c.prefix_size;
+	if (node->c.type & TKVDB_NODE_LEAF) {
+		c->val = ((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta
+			+ node->c.prefix_size;
+	} else {
+		c->val = node->prefix_val_meta + node->c.prefix_size;
+	}
 
 	return TKVDB_OK;
 }
@@ -58,7 +63,12 @@ TKVDB_IMPL_CURSOR_POP(tkvdb_cursor *cr)
 	c->stack_size--;
 
 	c->val_size = node->c.val_size;
-	c->val = node->prefix_val_meta + node->c.prefix_size;
+	if (node->c.type & TKVDB_NODE_LEAF) {
+		c->val = ((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta
+			+ node->c.prefix_size;
+	} else {
+		c->val = node->prefix_val_meta + node->c.prefix_size;
+	}
 
 	return TKVDB_OK;
 }
@@ -106,9 +116,17 @@ TKVDB_IMPL_SMALLEST(tkvdb_cursor *cr, TKVDB_MEMNODE_TYPE *node)
 				node->c.prefix_size) );
 
 			/* append prefix */
-			memcpy(c->prefix + c->prefix_size,
-				node->prefix_val_meta,
-				node->c.prefix_size);
+			if (node->c.type & TKVDB_NODE_LEAF) {
+				TKVDB_MEMNODE_TYPE_LEAF *node_leaf;
+				node_leaf = (TKVDB_MEMNODE_TYPE_LEAF *)node;
+				memcpy(c->prefix + c->prefix_size,
+					node_leaf->prefix_val_meta,
+					node->c.prefix_size);
+			} else {
+				memcpy(c->prefix + c->prefix_size,
+					node->prefix_val_meta,
+					node->c.prefix_size);
+			}
 			c->prefix_size += node->c.prefix_size;
 		}
 
@@ -159,9 +177,17 @@ TKVDB_IMPL_BIGGEST(tkvdb_cursor *cr, TKVDB_MEMNODE_TYPE *node)
 				node->c.prefix_size) );
 
 			/* append prefix */
-			memcpy(c->prefix + c->prefix_size,
-				node->prefix_val_meta,
-				node->c.prefix_size);
+			if (node->c.type & TKVDB_NODE_LEAF) {
+				TKVDB_MEMNODE_TYPE_LEAF *node_leaf;
+				node_leaf = (TKVDB_MEMNODE_TYPE_LEAF *)node;
+				memcpy(c->prefix + c->prefix_size,
+					node_leaf->prefix_val_meta,
+					node->c.prefix_size);
+			} else {
+				memcpy(c->prefix + c->prefix_size,
+					node->prefix_val_meta,
+					node->c.prefix_size);
+			}
 			c->prefix_size += node->c.prefix_size;
 		}
 
@@ -336,6 +362,7 @@ TKVDB_IMPL_SEEK(tkvdb_cursor *cr, const tkvdb_datum *key, TKVDB_SEEK seek)
 	const uint8_t *sym;
 	size_t pi;
 	int off = 0;
+	unsigned char *prefix_val_meta;
 	tkvdb_cursor_data *c = cr->data;
 	tkvdb_tr_data *tr = c->tr->data;
 
@@ -348,6 +375,12 @@ TKVDB_IMPL_SEEK(tkvdb_cursor *cr, const tkvdb_datum *key, TKVDB_SEEK seek)
 next_node:
 	TKVDB_SKIP_RNODES(node);
 	pi = 0;
+	if (node->c.type & TKVDB_NODE_LEAF) {
+		prefix_val_meta =
+			((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta;
+	} else {
+		prefix_val_meta = node->prefix_val_meta;
+	}
 
 next_byte:
 	if (sym >= ((uint8_t *)key->data + key->size)) {
@@ -355,7 +388,7 @@ next_byte:
 		if ((pi == node->c.prefix_size)
 			&& (node->c.type & TKVDB_NODE_VAL)) {
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND(cr,
-				node->prefix_val_meta, node->c.prefix_size) );
+				prefix_val_meta, node->c.prefix_size) );
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, *sym) );
 			return TKVDB_OK;
 		}
@@ -378,7 +411,7 @@ next_byte:
 		TKVDB_SUBNODE_NEXT(c->tr, node, next, *sym);
 		if (next) {
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND(cr,
-				node->prefix_val_meta, node->c.prefix_size) );
+				prefix_val_meta, node->c.prefix_size) );
 
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND_SYM(cr, *sym) );
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, *sym) );
@@ -428,29 +461,29 @@ next_byte:
 		}
 	}
 
-	if (node->prefix_val_meta[pi] != *sym) {
+	if (prefix_val_meta[pi] != *sym) {
 		if (seek == TKVDB_SEEK_EQ) {
 			tkvdb_cursor_reset(cr);
 			return TKVDB_NOT_FOUND;
 		}
 
 		if (seek == TKVDB_SEEK_LE) {
-			if (node->prefix_val_meta[pi] < *sym) {
+			if (prefix_val_meta[pi] < *sym) {
 				/* symbol in prefix is lesser than in key */
 				return TKVDB_IMPL_BIGGEST(cr, node);
 			}
 			/* not optimal, we push node and pop it in prev() */
 			TKVDB_EXEC (TKVDB_IMPL_CURSOR_APPEND(cr,
-				node->prefix_val_meta, node->c.prefix_size) );
+				prefix_val_meta, node->c.prefix_size) );
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, -1) );
 			return TKVDB_IMPL_PREV(cr);
 		} else {
 			/* greater */
-			if (node->prefix_val_meta[pi] > *sym) {
+			if (prefix_val_meta[pi] > *sym) {
 				return TKVDB_IMPL_SMALLEST(cr, node);
 			}
 			TKVDB_EXEC (TKVDB_IMPL_CURSOR_APPEND(cr,
-				node->prefix_val_meta, node->c.prefix_size) );
+				prefix_val_meta, node->c.prefix_size) );
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, *sym) );
 			return TKVDB_IMPL_NEXT(cr);
 		}

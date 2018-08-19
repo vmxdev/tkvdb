@@ -44,10 +44,12 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 		return TKVDB_OK;
 	} else if (node->c.type & TKVDB_NODE_VAL) {
 		/* check if we have at least 1 subnode */
-		for (i=0; i<256; i++) {
-			if (node->next[i] || node->fnext[i]) {
-				n_subnodes = 1;
-				break;
+		if (!(node->c.type & TKVDB_NODE_LEAF)) {
+			for (i=0; i<256; i++) {
+				if (node->next[i] || node->fnext[i]) {
+					n_subnodes = 1;
+					break;
+				}
 			}
 		}
 
@@ -141,6 +143,7 @@ TKVDB_IMPL_DEL(tkvdb_tr *trns, const tkvdb_datum *key, int del_pfx)
 	const unsigned char *sym;
 	TKVDB_MEMNODE_TYPE *node, *prev;
 	size_t pi;
+	unsigned char *prefix_val_meta;
 	int prev_off = 0;
 	tkvdb_tr_data *tr = trns->data;
 
@@ -167,6 +170,12 @@ TKVDB_IMPL_DEL(tkvdb_tr *trns, const tkvdb_datum *key, int del_pfx)
 next_node:
 	TKVDB_SKIP_RNODES(node);
 	pi = 0;
+	if (node->c.type & TKVDB_NODE_LEAF) {
+		prefix_val_meta =
+			((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta;
+	} else {
+		prefix_val_meta = node->prefix_val_meta;
+	}
 
 next_byte:
 
@@ -208,7 +217,7 @@ next_byte:
 		}
 	}
 
-	if (node->prefix_val_meta[pi] != *sym) {
+	if (prefix_val_meta[pi] != *sym) {
 		return TKVDB_NOT_FOUND;
 	}
 

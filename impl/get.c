@@ -15,11 +15,11 @@
  */
 
 /* get value for given key */
-
 static TKVDB_RES
 TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 {
 	const unsigned char *sym;
+	unsigned char *prefix_val_meta;
 	size_t pi;
 	TKVDB_MEMNODE_TYPE *node = NULL;
 	uint64_t off;
@@ -48,6 +48,12 @@ TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 next_node:
 	TKVDB_SKIP_RNODES(node);
 	pi = 0;
+	if (node->c.type & TKVDB_NODE_LEAF) {
+		prefix_val_meta =
+			((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta;
+	} else {
+		prefix_val_meta = node->prefix_val_meta;
+	}
 
 next_byte:
 
@@ -57,7 +63,7 @@ next_byte:
 			&& (node->c.type & TKVDB_NODE_VAL)) {
 			/* exact match and node with value */
 			val->size = node->c.val_size;
-			val->data = node->prefix_val_meta
+			val->data = prefix_val_meta
 				+ node->c.prefix_size;
 			return TKVDB_OK;
 		} else {
@@ -67,7 +73,9 @@ next_byte:
 
 	if (pi >= node->c.prefix_size) {
 		/* end of prefix */
-		if (node->next[*sym] != NULL) {
+		if (node->c.type & TKVDB_NODE_LEAF) {
+			return TKVDB_NOT_FOUND;
+		} else if (node->next[*sym] != NULL) {
 			/* continue with next node */
 			node = node->next[*sym];
 			sym++;
@@ -88,7 +96,7 @@ next_byte:
 		}
 	}
 
-	if (node->prefix_val_meta[pi] != *sym) {
+	if (prefix_val_meta[pi] != *sym) {
 		return TKVDB_NOT_FOUND;
 	}
 
