@@ -151,11 +151,10 @@ next_byte:
 		if (node->c.type & TKVDB_NODE_LEAF) {
 			/* create 2 nodes */
 			TKVDB_MEMNODE_TYPE *newroot, *subnode_rest;
-			/* FIXME: wrong?! */
 			newroot = TKVDB_IMPL_NODE_NEW(trns,
-				TKVDB_NODE_VAL,
-				node->c.prefix_size - pi - 1,
-				prefix_val_meta + pi + 1,
+				node->c.type & (~TKVDB_NODE_LEAF),
+				node->c.prefix_size,
+				prefix_val_meta,
 				node->c.val_size,
 				prefix_val_meta + node->c.prefix_size);
 			if (!newroot) {
@@ -174,6 +173,9 @@ next_byte:
 			if (!subnode_rest) return TKVDB_ENOMEM;
 
 			newroot->next[*sym] = subnode_rest;
+
+			TKVDB_REPLACE_NODE(node, newroot);
+
 			return TKVDB_OK;
 		} else if (node->next[*sym] != NULL) {
 			/* continue with next node */

@@ -15,7 +15,7 @@ static void test_init();
 
 #define KLEN 100
 #define VLEN 100
-#define N 2000
+#define N 20000
 #define TR_SIZE 10
 
 struct kv
