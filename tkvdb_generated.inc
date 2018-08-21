@@ -30,6 +30,9 @@
 #define TKVDB_IMPL_COMMIT tkvdb_commit_alignval
 #define TKVDB_IMPL_DO_DEL tkvdb_do_del_alignval
 #define TKVDB_IMPL_DEL tkvdb_del_alignval
+
+#define TKVDB_PARAMS_ALIGN_VAL
+
 #include "impl/memnode.h"
 #include "impl/node.c"
 #include "impl/put.c"
@@ -66,6 +69,9 @@
 #undef TKVDB_IMPL_COMMIT
 #undef TKVDB_IMPL_DO_DEL
 #undef TKVDB_IMPL_DEL
+
+#undef TKVDB_PARAMS_ALIGN_VAL
+
 #undef TKVDB_MEMNODE_TYPE
 #undef TKVDB_MEMNODE_TYPE_COMMON
 #undef TKVDB_MEMNODE_TYPE_LEAF

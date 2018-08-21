@@ -99,6 +99,10 @@ print_block(const char *name)
 		free(func_upper);
 	}
 
+	if (strcmp(name, "alignval") == 0) {
+		printf("\n#define TKVDB_PARAMS_ALIGN_VAL\n\n");
+	}
+
 	for (i=0; incs[i]; i++) {
 		printf("#include \"%s\"\n", incs[i]);
 	}
@@ -109,6 +113,11 @@ print_block(const char *name)
 		printf("#undef TKVDB_IMPL_%s\n", func_upper);
 		free(func_upper);
 	}
+
+	if (strcmp(name, "alignval") == 0) {
+		printf("\n#undef TKVDB_PARAMS_ALIGN_VAL\n\n");
+	}
+
 	printf("#undef TKVDB_MEMNODE_TYPE\n");
 	printf("#undef TKVDB_MEMNODE_TYPE_COMMON\n");
 	printf("#undef TKVDB_MEMNODE_TYPE_LEAF\n\n\n");

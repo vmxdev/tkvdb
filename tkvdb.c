@@ -167,12 +167,14 @@ typedef struct tkvdb_tr_data
 	uint8_t *tr_buf;                /* transaction buffer */
 	size_t tr_buf_allocated;
 	uint8_t *tr_buf_ptr;
+
+	size_t valign;                  /* value alignment */
 } tkvdb_tr_data;
 
 struct tkvdb_visit_helper
 {
-	void *node;             /* pointer to memnode */
-	int off;                /* index of subnode in node */
+	void *node;                     /* pointer to memnode */
+	int off;                        /* index of subnode in node */
 };
 
 /* database cursor */
