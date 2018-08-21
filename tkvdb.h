@@ -56,6 +56,9 @@ struct tkvdb_tr
 		const tkvdb_datum *key, tkvdb_datum *val);
 	TKVDB_RES (*del)(tkvdb_tr *tr, const tkvdb_datum *key, int del_pfx);
 
+	/* get size of memory used by transaction */
+	size_t (*mem)(tkvdb_tr *tr);
+
 	void (*free)(tkvdb_tr *tr);
 
 	void *data;

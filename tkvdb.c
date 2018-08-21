@@ -594,6 +594,13 @@ tkvdb_begin(tkvdb_tr *trns)
 	return TKVDB_OK;
 }
 
+static size_t
+tkvdb_tr_mem(tkvdb_tr *trns)
+{
+	tkvdb_tr_data *tr = trns->data;
+	return tr->tr_buf_allocated;
+}
+
 tkvdb_tr *
 tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 {
@@ -642,6 +649,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 
 	/* setup functions */
 	tr->begin = &tkvdb_begin;
+	tr->mem = &tkvdb_tr_mem;
 
 	if (trdata->params.alignval) {
 		tr->commit = &tkvdb_commit_alignval;
@@ -651,7 +659,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 		tr->get = &tkvdb_get_alignval;
 		tr->del = &tkvdb_del_alignval;
 
-		tr->free = tkvdb_tr_free_alignval;
+		tr->free = &tkvdb_tr_free_alignval;
 	} else {
 		tr->commit = &tkvdb_commit_generic;
 		tr->rollback = &tkvdb_rollback_generic;
@@ -660,7 +668,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 		tr->get = &tkvdb_get_generic;
 		tr->del = &tkvdb_del_generic;
 
-		tr->free = tkvdb_tr_free_generic;
+		tr->free = &tkvdb_tr_free_generic;
 	}
 
 	return tr;

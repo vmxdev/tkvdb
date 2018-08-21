@@ -43,7 +43,6 @@ TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 
 	sym = key->data;
 	node = tr->root;
-	off = tr->db->info.footer.root_off;
 
 next_node:
 	TKVDB_SKIP_RNODES(node);
