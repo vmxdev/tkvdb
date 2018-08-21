@@ -12,6 +12,13 @@ Keys are always sorted in memcmp() order.
   * Querying the database for a specific key.
   * Iterating through a range of database keys (either forwards or backwards).
 
+## Portability
+
+`tkvdb` is written in ANSI C, without using platform or OS-specific functions.
+It uses traditional `open/seek/read/write/close` API for operations with data files and some string functions (`memset/memcpy`) for dealing with in-memory transactions.
+There is no limitations for 32-bit CPU's, except for size of memory buffers.
+`tkvdb` was tested on Linux(x32/x64 CPU's and 32 bit ARM) and under Wine using mingw (hopefully it will run under Windows).
+
 ## Basic usage
 
 API is quite a simple, but requires some explanation.
