@@ -142,11 +142,18 @@ But be careful with `transaction->rollback()` and `transaction->commit()` - ther
   * Cursors operations are slow (compared with `get()` or even `put()` with tkvdb builtin allocator). There is a call to `realoc()` on each node hit. Probably it will be fixed.
   * There is no easy way to get N-th record of database. However, it's possible to implement such seeks using some nodes metadata.
   * In RAM-only mode (without underlying database file) non-leaf nodes still contains array of offsets in file (2Kbytes per node). This is definitely not needed.
-  * There is no publicly available benchmarks and nice performance charts. You can run `perf_test` from `extra` directory, it will show ops(updates and lookups) per second for 4 and 16 byte keys with different number of keys in transaction. Test is single-threaded and shows RAM-only operations. Depending on hardware you may get up to tens of millions ops per second (or even more than 100 millions lookups per second for short keys). Probably we will make more accurate, complete and readable performance tests.
+  * There is no publicly available benchmarks and nice performance charts. You can run `perf_test` from `extra` directory, it will show ops(inserts/updates and lookups) per second for 4 and 16 byte keys with different number of keys in transaction. Test is single-threaded and shows RAM-only operations. Depending on hardware you may get up to tens of millions ops per second (or even more than 100 millions lookups per second for short keys). Probably we will make more accurate, complete and readable performance tests.
 
-## Compiling and running test
+## Compiling and running tests
 
+Unit test:
 ```sh
-$ cc -Wall -pedantic -Wextra -I. extra/tkvdb_test.c tkvdb.c -o tkvdb_test
+$ cc -g -Wall -pedantic -Wextra -I. extra/tkvdb_test.c tkvdb.c -o tkvdb_test
 $ ./tkvdb_test
+```
+
+Simple performance test:
+```sh
+$ cc -O3 -Wall -pedantic -Wextra -I. extra/perf_test.c tkvdb.c -o perf_test
+$ ./perf_test
 ```
