@@ -15,9 +15,12 @@ Keys are always sorted in memcmp() order.
 ## Portability
 
 `tkvdb` is written in ANSI C, without using platform or OS-specific functions.
-It uses traditional `open/seek/read/write/close` API for operations with data files and some string functions (`memset/memcpy`) for dealing with in-memory transactions.
+
+It uses traditional `open/seek/read/write/close` API for operations with data files, memory allocation (`malloc/realloc/free`) and some string functions (`memset/memcpy`) for dealing with in-memory transactions.
+
 There is no limitations for 32-bit CPU's, except for size of memory buffers.
-`tkvdb` was tested on Linux(x32/x64 CPU's and 32 bit ARM) and under Wine using mingw (hopefully it will run under Windows).
+
+`tkvdb` was tested on Linux(x32/x64 CPU's and 32 bit ARM) and under Wine using mingw (hopefully it will work under Windows).
 
 ## Basic usage
 
@@ -131,6 +134,15 @@ However, on some CPU's (at least on x32/x64) we can guarantee that `transaction-
 Updates of tree are lock-free and atomic.
 You can use one writer and multiple readers without locks.
 But be careful with `transaction->rollback()` and `transaction->commit()` - there is no such guarantees for theese functions, reading from transaction while resetting it can lead to unpredicatable consequences.
+
+## Bugs and caveats (sort of TODO)
+
+  * There is still no `vacuum` routine for database file. We have initial and bogus implementation, but it's not tested, so the database now is append-only.
+  * Cursor operations (seeks and traversal) has fixed limit for tree depth. Limit is defined in `tkvdb.c` (`TKVDB_STACK_MAX_DEPTH 128`), you can increase it and recompile if needed.
+  * Cursors operations are slow (compared with `get()` or even `put()` with tkvdb builtin allocator). There is a call to `realoc()` on each node hit. Probably it will be fixed.
+  * There is no easy way to get N-th record of database. However, it's possible to implement such seeks using some nodes metadata.
+  * In RAM-only mode (without underlying database file) non-leaf nodes still contains array of offsets in file (2Kbytes per node). This is definitely not needed.
+  * There is no publicly available benchmarks and nice performance charts. You can run `perf_test` from `extra` directory, it will show ops(updates and lookups) per second for 4 and 16 byte keys with different number of keys in transaction. Test is single-threaded and shows RAM-only operations. Depending on hardware you may get up to tens of millions ops per second (or even more than 100 millions lookups per second for short keys). Probably we will make more accurate, complete and readable performance tests.
 
 ## Compiling and running test
 
