@@ -367,9 +367,8 @@ tkvdb_close(tkvdb *db)
 	if (close(db->fd) < 0) {
 		r = TKVDB_IO_ERROR;
 	}
-	if (db->write_buf) {
-		free(db->write_buf);
-	}
+
+	free(db->write_buf);
 
 	free(db);
 	return r;
@@ -423,10 +422,8 @@ tkvdb_cursor_free(tkvdb_cursor *c)
 	tkvdb_cursor_data *cdata;
 
 	cdata = c->data;
-	if (cdata->prefix) {
-		free(cdata->prefix);
-		cdata->prefix = NULL;
-	}
+
+	free(cdata->prefix);
 	cdata->prefix_size = 0;
 
 	cdata->val_size = 0;
