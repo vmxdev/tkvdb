@@ -94,8 +94,8 @@ To iterate in reverse order use `cursor->last()` and `cursor->prev()`.
 If you want to search a key-value pair in database by prefix use `cursor->seek(cursor, &key, TKVDB_SEEK)`
 where `TKVDB_SEEK` can be:
   * `TKVDB_SEEK_EQ` : search for the exact key match
-  * `TKVDB_SEEK_LE` : search for less (in terms of memcpy()) or equal key
-  * `TKVDB_SEEK_GE` : search for greater (in terms of memcpy()) or equal key
+  * `TKVDB_SEEK_LE` : search for less (in terms of memcmp()) or equal key
+  * `TKVDB_SEEK_GE` : search for greater (in terms of memcmp()) or equal key
 
 After seeking to key-value pair you can use `cursor->next()` or `cursor->prev()`
 
