@@ -63,7 +63,7 @@ do {                                       \
 #define TKVDB_SKIP_RNODES(NODE)            \
 while (NODE->c.replaced_by) {              \
 	NODE = NODE->c.replaced_by;        \
-} while (0)
+}
 
 /* replace node with updated one */
 /* FIXME: (optional) memory barrier? */
