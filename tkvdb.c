@@ -474,10 +474,8 @@ tkvdb_cursor_expand_prefix(tkvdb_cursor *c, int n)
 
 	if (n == 0) {
 		/* underflow */
-		if (cdata->prefix) {
-			free(cdata->prefix);
-			cdata->prefix = NULL;
-		}
+		free(cdata->prefix);
+		cdata->prefix = NULL;
 		return TKVDB_OK;
 	}
 
@@ -505,7 +503,7 @@ tkvdb_cursor_reset(tkvdb_cursor *c)
 	tkvdb_cursor_data *cdata = c->data;
 
 	cdata->stack_size = 0;
-	if (cdata->prefix_size && cdata->prefix) {
+	if (cdata->prefix_size > 0) {
 		free(cdata->prefix);
 		cdata->prefix = NULL;
 	}
