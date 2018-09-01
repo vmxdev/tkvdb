@@ -729,8 +729,8 @@ main(int argc, char** argv)
     for(i = 0; test_list__[i].func != NULL; i++)
         test_list_size__++;
 
-    tests__ = (const struct test__**) malloc(sizeof(const struct test__*) * test_list_size__);
-    test_flags__ = (char*) malloc(sizeof(char) * test_list_size__);
+    tests__ = (const struct test__**) alloca(sizeof(const struct test__*) * test_list_size__);
+    test_flags__ = (char*) alloca(sizeof(char) * test_list_size__);
     if(tests__ == NULL || test_flags__ == NULL) {
         fprintf(stderr, "Out of memory.\n");
         exit(2);
@@ -850,9 +850,6 @@ main(int argc, char** argv)
         if(test_verbose_level__ >= 3)
             printf("\n");
     }
-
-    free((void*) tests__);
-    free((void*) test_flags__);
 
     return (test_stat_failed_units__ == 0) ? 0 : 1;
 }
