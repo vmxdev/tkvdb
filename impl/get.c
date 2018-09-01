@@ -62,8 +62,11 @@ next_byte:
 			&& (node->c.type & TKVDB_NODE_VAL)) {
 			/* exact match and node with value */
 			val->size = node->c.val_size;
-			val->data = prefix_val_meta
-				+ node->c.prefix_size;
+#ifdef TKVDB_PARAMS_ALIGN_VAL
+			val->data = node->c.val_ptr;
+#else
+			val->data = prefix_val_meta + node->c.prefix_size;
+#endif
 			return TKVDB_OK;
 		} else {
 			return TKVDB_NOT_FOUND;

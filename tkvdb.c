@@ -167,8 +167,6 @@ typedef struct tkvdb_tr_data
 	uint8_t *tr_buf;                /* transaction buffer */
 	size_t tr_buf_allocated;
 	uint8_t *tr_buf_ptr;
-
-	size_t valign;                  /* value alignment */
 } tkvdb_tr_data;
 
 struct tkvdb_visit_helper
@@ -648,7 +646,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 	tr->begin = &tkvdb_begin;
 	tr->mem = &tkvdb_tr_mem;
 
-	if (trdata->params.alignval) {
+	if (trdata->params.alignval > 1) {
 		tr->commit = &tkvdb_commit_alignval;
 		tr->rollback = &tkvdb_rollback_alignval;
 
@@ -718,7 +716,7 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 
 	c->free = &tkvdb_cursor_free;
 
-	if (trdata->params.alignval) {
+	if (trdata->params.alignval > 1) {
 		c->seek = &tkvdb_seek_alignval;
 		c->first = &tkvdb_first_alignval;
 		c->last = &tkvdb_last_alignval;

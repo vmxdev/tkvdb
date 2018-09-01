@@ -18,6 +18,8 @@ static void test_init();
 #define N 20000
 #define TR_SIZE 10
 
+static int test_aligned = 0;
+
 struct kv
 {
 	char key[KLEN];
@@ -398,10 +400,19 @@ test_get(void)
 	tkvdb_tr *tr;
 	size_t i;
 	const size_t NITER = 10000;
+	tkvdb_params *params;
 	tkvdb_datum dtk, dtv;
 
-	db = tkvdb_open(fn, NULL);
+	params = tkvdb_params_create();
+	TEST_CHECK(params != NULL);
+	if (test_aligned) {
+		tkvdb_param_set(params, TKVDB_PARAM_ALIGNVAL, 4);
+	}
+
+	db = tkvdb_open(fn, params);
 	TEST_CHECK(db != NULL);
+	tkvdb_params_free(params);
+
 	tr = tkvdb_tr_create(db, NULL);
 	TEST_CHECK(tr != NULL);
 
@@ -447,6 +458,14 @@ test_get(void)
 
 	tr->free(tr);
 	tkvdb_close(db);
+}
+
+void
+test_get_aligned(void)
+{
+	test_aligned = 1;
+	test_get();
+	test_aligned = 0;
 }
 
 #if 0
@@ -518,6 +537,7 @@ TEST_LIST = {
 	{ "first/last and next/prev", test_iter },
 	{ "random seeks", test_seek },
 	{ "get", test_get },
+	{ "get aligned", test_get_aligned },
 	{ "delete", test_del },
 	/*{ "vacuum", test_vacuum },*/
 	{ 0 }

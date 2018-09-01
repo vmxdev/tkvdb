@@ -30,11 +30,16 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 	uint8_t *prefix;
 	uint8_t *val_ptr;
 	uint8_t *meta_ptr;
+	int valign;
 #else
 	uint8_t *prefix_val_meta;
 #endif
 
 	tkvdb_tr_data *tr = trns->data;
+
+#ifdef TKVDB_PARAMS_ALIGN_VAL
+	valign = tr->params.alignval;
+#endif
 
 	if (!tr->started) {
 		return TKVDB_NOT_STARTED;
@@ -73,11 +78,11 @@ next_node:
 	}
 
 	val_ptr = prefix + node->c.prefix_size;
-	val_ptr = (uint8_t *)((((uintptr_t)val_ptr + tr->valign - 1)
-		/ tr->valign) * tr->valign);
+	val_ptr = (uint8_t *)((((uintptr_t)val_ptr + valign - 1)
+		/ valign) * valign);
 	meta_ptr = val_ptr + node->c.val_size;
-	meta_ptr = (uint8_t *)((((uintptr_t)meta_ptr + tr->valign - 1)
-		/ tr->valign) * tr->valign);
+	meta_ptr = (uint8_t *)((((uintptr_t)meta_ptr + valign - 1)
+		/ valign) * valign);
 #else
 	if (node->c.type & TKVDB_NODE_LEAF) {
 		prefix_val_meta =
