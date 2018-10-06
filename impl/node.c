@@ -80,22 +80,24 @@ TKVDB_IMPL_NODE_NEW(tkvdb_tr *tr, int type, size_t prefix_size,
 
 #ifdef TKVDB_PARAMS_ALIGN_VAL
 /* aligned value */
-#define NODE_ALIGN_GAP (((tkvdb_tr_data *)(tr->data))->params.alignval)
+#define NODE_ALIGN (((tkvdb_tr_data *)(tr->data))->params.alignval)
 
-#define VALPTR(NODE) ((uintptr_t)(NODE->prefix_val_meta + prefix_size))
+#define PTR_TO_VAL(NODE) ((uintptr_t)(NODE->prefix_val_meta + prefix_size))
 
-#define VALALIGNED(NODE) ((uint8_t *)(((VALPTR(NODE) + NODE_ALIGN_GAP - 1) \
-	/ NODE_ALIGN_GAP) * NODE_ALIGN_GAP))
+#define VALPADDING(NODE)                                                   \
+	(((PTR_TO_VAL(NODE) + NODE_ALIGN - 1) & -NODE_ALIGN)               \
+	- PTR_TO_VAL(NODE))
 
 #define COPY_VAL(NODE)                                                     \
 do {                                                                       \
-	NODE->c.val_ptr = VALALIGNED(NODE);                                \
-	memcpy(NODE->c.val_ptr, val, val_size);                            \
+	NODE->c.val_pad = VALPADDING(NODE);                                \
+	memcpy(NODE->prefix_val_meta + prefix_size + NODE->c.val_pad,      \
+		val, val_size);                                            \
 } while(0)
 
 #else
 /* non-aligned value */
-#define NODE_ALIGN_GAP 0
+#define NODE_ALIGN 0
 
 #define COPY_VAL(NODE)                                                     \
 do {                                                                       \
@@ -106,7 +108,7 @@ do {                                                                       \
 
 	if (type & TKVDB_NODE_LEAF) {
 		node_size = sizeof(TKVDB_MEMNODE_TYPE_LEAF)
-			+ prefix_size + val_size + NODE_ALIGN_GAP;
+			+ prefix_size + val_size + NODE_ALIGN;
 		node_leaf = TKVDB_IMPL_NODE_ALLOC(tr, node_size);
 		if (!node_leaf) {
 			return NULL;
@@ -114,7 +116,7 @@ do {                                                                       \
 		node_common = &node_leaf->c;
 	} else {
 		node_size = sizeof(TKVDB_MEMNODE_TYPE)
-			+ prefix_size + val_size + NODE_ALIGN_GAP;
+			+ prefix_size + val_size + NODE_ALIGN;
 		node = TKVDB_IMPL_NODE_ALLOC(tr, node_size);
 		if (!node) {
 			return NULL;
@@ -154,9 +156,9 @@ do {                                                                       \
 	}
 
 	return ret;
-#undef NODE_ALIGN_GAP
-#undef VALPTR
-#undef VALALIGNED
+#undef NODE_ALIGN
+#undef PTR_TO_VAL
+#undef VALPADDING
 #undef COPY_VAL
 }
 
@@ -167,7 +169,8 @@ TKVDB_IMPL_CLONE_SUBNODES(TKVDB_MEMNODE_TYPE *dst, TKVDB_MEMNODE_TYPE *src)
 		memset(dst->next, 0, sizeof(void *) * 256);
 		memset(dst->fnext, 0, sizeof(uint64_t) * 256);
 	} else {
-		memcpy(dst->next,  src->next, sizeof(TKVDB_MEMNODE_TYPE *) * 256);
+		memcpy(dst->next,  src->next,
+			sizeof(TKVDB_MEMNODE_TYPE *) * 256);
 		memcpy(dst->fnext, src->fnext, sizeof(uint64_t) * 256);
 	}
 }
@@ -188,15 +191,16 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 
 #ifdef TKVDB_PARAMS_ALIGN_VAL
 /* aligned value */
-#define NODE_ALIGN_GAP (tr->params.alignval)
+#define NODE_ALIGN (tr->params.alignval)
 
-#define VALPTR(NODE) ((uintptr_t)(prefix_val_meta + NODE->c.prefix_size))
+#define PTR_TO_VAL(NODE) ((uintptr_t)(prefix_val_meta + NODE->c.prefix_size))
 
-#define VALALIGNED(NODE) ((uint8_t *)(((VALPTR(NODE) + NODE_ALIGN_GAP - 1) \
-	/ NODE_ALIGN_GAP) * NODE_ALIGN_GAP))
+#define VALPADDING(NODE)                                                   \
+	(((PTR_TO_VAL(NODE) + NODE_ALIGN - 1) & -NODE_ALIGN)               \
+	- PTR_TO_VAL(NODE))
 
 #else
-#define NODE_ALIGN_GAP 0
+#define NODE_ALIGN 0
 #endif
 
 	fd = tr->db->fd;
@@ -240,11 +244,11 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 	if (disknode->type & TKVDB_NODE_LEAF) {
 		*node_ptr = TKVDB_IMPL_NODE_ALLOC(trns,
 			sizeof(TKVDB_MEMNODE_TYPE_LEAF)
-			+ prefix_val_meta_size + NODE_ALIGN_GAP);
+			+ prefix_val_meta_size + NODE_ALIGN);
 	} else {
 		*node_ptr = TKVDB_IMPL_NODE_ALLOC(trns,
 			sizeof(TKVDB_MEMNODE_TYPE)
-			+ prefix_val_meta_size + NODE_ALIGN_GAP);
+			+ prefix_val_meta_size + NODE_ALIGN);
 	}
 
 	if (!(*node_ptr)) {
@@ -317,8 +321,10 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 		/* copy prefix */
 		memcpy(prefix_val_meta, ptr, (*node_ptr)->c.prefix_size);
 		/* and value */
-		(*node_ptr)->c.val_ptr = VALALIGNED((*node_ptr));
-		memcpy((*node_ptr)->c.val_ptr,
+		(*node_ptr)->c.val_pad = VALPADDING((*node_ptr));
+		memcpy(prefix_val_meta
+			+ (*node_ptr)->c.prefix_size
+			+ (*node_ptr)->c.val_pad,
 			ptr + (*node_ptr)->c.prefix_size,
 			prefix_val_meta_size - (*node_ptr)->c.prefix_size);
 #else
@@ -327,9 +333,9 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 	}
 
 	return TKVDB_OK;
-#undef NODE_ALIGN_GAP
-#undef VALPTR
-#undef VALALIGNED
+#undef NODE_ALIGN
+#undef PTR_TO_VAL
+#undef VALPADDING
 }
 
 /* free node and subnodes */

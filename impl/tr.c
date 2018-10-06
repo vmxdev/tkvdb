@@ -97,10 +97,17 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 	if (node->c.type & TKVDB_NODE_LEAF) {
 		TKVDB_MEMNODE_TYPE_LEAF *node_leaf;
 		node_leaf = (TKVDB_MEMNODE_TYPE_LEAF *)node;
+#ifdef TKVDB_PARAMS_ALIGN_VAL
 		memcpy(ptr, node_leaf->prefix_val_meta,
 			node->c.prefix_size
 			+ node->c.val_size
 			+ node->c.meta_size);
+#else
+		memcpy(ptr, node_leaf->prefix_val_meta,
+			node->c.prefix_size
+			+ node->c.val_size
+			+ node->c.meta_size);
+#endif
 	} else {
 		if (node->c.nsubnodes > TKVDB_SUBNODES_THR) {
 			memcpy(ptr, node->fnext, sizeof(uint64_t) * 256);
@@ -122,10 +129,17 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 				}
 			}
 		}
+#ifdef TKVDB_PARAMS_ALIGN_VAL
 		memcpy(ptr, node->prefix_val_meta,
 			node->c.prefix_size
 			+ node->c.val_size
 			+ node->c.meta_size);
+#else
+		memcpy(ptr, node->prefix_val_meta,
+			node->c.prefix_size
+			+ node->c.val_size
+			+ node->c.meta_size);
+#endif
 	}
 
 

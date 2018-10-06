@@ -63,7 +63,8 @@ next_byte:
 			/* exact match and node with value */
 			val->size = node->c.val_size;
 #ifdef TKVDB_PARAMS_ALIGN_VAL
-			val->data = node->c.val_ptr;
+			val->data = prefix_val_meta + node->c.prefix_size
+				+ node->c.val_pad;
 #else
 			val->data = prefix_val_meta + node->c.prefix_size;
 #endif

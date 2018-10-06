@@ -29,8 +29,8 @@ typedef struct TKVDB_MEMNODE_TYPE_COMMON
 	size_t meta_size;
 
 #ifdef TKVDB_PARAMS_ALIGN_VAL
-	uint8_t *val_ptr;                 /* pointer to aligned val */
-	uint8_t *meta_ptr;                /* pointer to aligned metadata */
+	size_t val_pad;                   /* padding for aligned value */
+	size_t meta_pad;                  /* and metadata */
 #endif
 
 	uint64_t disk_size;               /* size of node on disk */
