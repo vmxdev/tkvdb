@@ -18,6 +18,9 @@ static void test_init();
 #define N 20000
 #define TR_SIZE 10
 
+/* for alignment tests, must be power of two  */
+#define VAL_ALIGNMENT 8
+
 static int test_aligned = 0;
 
 struct kv
@@ -406,7 +409,7 @@ test_get(void)
 	params = tkvdb_params_create();
 	TEST_CHECK(params != NULL);
 	if (test_aligned) {
-		tkvdb_param_set(params, TKVDB_PARAM_ALIGNVAL, 4);
+		tkvdb_param_set(params, TKVDB_PARAM_ALIGNVAL, VAL_ALIGNMENT);
 	}
 
 	db = tkvdb_open(fn, params);
@@ -432,6 +435,9 @@ test_get(void)
 		TEST_CHECK(kvs[idx].vlen == dtv.size);
 
 		TEST_CHECK(memcmp(dtv.data, kvs[idx].val, dtv.size) == 0);
+		if (test_aligned) {
+			TEST_CHECK((uintptr_t)dtv.data % VAL_ALIGNMENT == 0);
+		}
 	}
 
 	/* nonexistent */

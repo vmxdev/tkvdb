@@ -98,15 +98,19 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 		TKVDB_MEMNODE_TYPE_LEAF *node_leaf;
 		node_leaf = (TKVDB_MEMNODE_TYPE_LEAF *)node;
 #ifdef TKVDB_PARAMS_ALIGN_VAL
-		memcpy(ptr, node_leaf->prefix_val_meta,
-			node->c.prefix_size
-			+ node->c.val_size
-			+ node->c.meta_size);
+		/* copy prefix */
+		memcpy(ptr, node_leaf->prefix_val_meta, node->c.prefix_size);
+		/* and value */
+		memcpy(ptr + node_leaf->c.prefix_size,
+			node_leaf->prefix_val_meta
+				+ node_leaf->c.prefix_size
+				+ node_leaf->c.val_pad,
+			node_leaf->c.val_size);
 #else
 		memcpy(ptr, node_leaf->prefix_val_meta,
-			node->c.prefix_size
-			+ node->c.val_size
-			+ node->c.meta_size);
+			node_leaf->c.prefix_size
+			+ node_leaf->c.val_size
+			+ node_leaf->c.meta_size);
 #endif
 	} else {
 		if (node->c.nsubnodes > TKVDB_SUBNODES_THR) {
@@ -130,10 +134,12 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 			}
 		}
 #ifdef TKVDB_PARAMS_ALIGN_VAL
-		memcpy(ptr, node->prefix_val_meta,
-			node->c.prefix_size
-			+ node->c.val_size
-			+ node->c.meta_size);
+		memcpy(ptr, node->prefix_val_meta, node->c.prefix_size);
+		memcpy(ptr + node->c.prefix_size,
+			node->prefix_val_meta
+				+ node->c.prefix_size
+				+ node->c.val_pad,
+			node->c.val_size);
 #else
 		memcpy(ptr, node->prefix_val_meta,
 			node->c.prefix_size

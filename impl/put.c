@@ -24,21 +24,16 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 	TKVDB_MEMNODE_TYPE *node;  /* current node */
 	size_t pi;                 /* prefix index */
 
-	/* pointer to data of node, it can be different for leaf and ordinary
-	 nodes */
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-	uint8_t *prefix;
-	uint8_t *val_ptr;
-	uint8_t *meta_ptr;
-	int valign;
-#else
+	/* pointer to data of node(prefix, value, metadata)
+	   it can be different for leaf and ordinary nodes */
 	uint8_t *prefix_val_meta;
-#endif
 
 	tkvdb_tr_data *tr = trns->data;
 
 #ifdef TKVDB_PARAMS_ALIGN_VAL
-	valign = tr->params.alignval;
+#define VAL_ALIGN_PAD (node->c.val_pad)
+#else
+#define VAL_ALIGN_PAD 0
 #endif
 
 	if (!tr->started) {
@@ -69,28 +64,13 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 next_node:
 	TKVDB_SKIP_RNODES(node);
 
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-	/* align val */
-	if (node->c.type & TKVDB_NODE_LEAF) {
-		prefix = ((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta;
-	} else {
-		prefix = node->prefix_val_meta;
-	}
-
-	val_ptr = prefix + node->c.prefix_size;
-	val_ptr = (uint8_t *)((((uintptr_t)val_ptr + valign - 1)
-		/ valign) * valign);
-	meta_ptr = val_ptr + node->c.val_size;
-	meta_ptr = (uint8_t *)((((uintptr_t)meta_ptr + valign - 1)
-		/ valign) * valign);
-#else
 	if (node->c.type & TKVDB_NODE_LEAF) {
 		prefix_val_meta =
 			((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta;
 	} else {
 		prefix_val_meta = node->prefix_val_meta;
 	}
-#endif
+
 	pi = 0;
 
 next_byte:
@@ -113,26 +93,17 @@ next_byte:
 				&& (val->size != 0)) {
 				/* same value size, so copy new value and
 					return */
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-				memcpy(val_ptr, val->data, val->size);
-#else
-				memcpy(prefix_val_meta + node->c.prefix_size,
+				memcpy(prefix_val_meta
+					+ node->c.prefix_size
+					+ VAL_ALIGN_PAD,
 					val->data, val->size);
-#endif
 				return TKVDB_OK;
 			}
 
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-			newroot = TKVDB_IMPL_NODE_NEW(trns,
-				node->c.type | TKVDB_NODE_VAL,
-				pi, prefix,
-				val->size, val->data);
-#else
 			newroot = TKVDB_IMPL_NODE_NEW(trns,
 				node->c.type | TKVDB_NODE_VAL,
 				pi, prefix_val_meta,
 				val->size, val->data);
-#endif
 			if (!newroot) return TKVDB_ENOMEM;
 
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
@@ -150,31 +121,17 @@ next_byte:
   [p][r][e] - new root
   next['f'] => [i][x] - tail
 */
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-		newroot = TKVDB_IMPL_NODE_NEW(trns, TKVDB_NODE_VAL, pi,
-			prefix, val->size, val->data);
-#else
 		newroot = TKVDB_IMPL_NODE_NEW(trns, TKVDB_NODE_VAL, pi,
 			prefix_val_meta,
 			val->size, val->data);
-#endif
 		if (!newroot) return TKVDB_ENOMEM;
 
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
-			node->c.type & (~TKVDB_NODE_LEAF),
-			node->c.prefix_size - pi - 1,
-			prefix + pi + 1,
-			node->c.val_size,
-			val_ptr);
-#else
 		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
 			node->c.type & (~TKVDB_NODE_LEAF),
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + node->c.prefix_size);
-#endif
+			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);
@@ -183,11 +140,7 @@ next_byte:
 		}
 		TKVDB_IMPL_CLONE_SUBNODES(subnode_rest, node);
 
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-		newroot->next[prefix[pi]] = subnode_rest;
-#else
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
-#endif
 
 		TKVDB_REPLACE_NODE(node, newroot);
 
@@ -206,21 +159,15 @@ next_byte:
 		if (node->c.type & TKVDB_NODE_LEAF) {
 			/* create 2 nodes */
 			TKVDB_MEMNODE_TYPE *newroot, *subnode_rest;
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-			newroot = TKVDB_IMPL_NODE_NEW(trns,
-				node->c.type & (~TKVDB_NODE_LEAF),
-				node->c.prefix_size,
-				prefix,
-				node->c.val_size,
-				val_ptr);
-#else
+
 			newroot = TKVDB_IMPL_NODE_NEW(trns,
 				node->c.type & (~TKVDB_NODE_LEAF),
 				node->c.prefix_size,
 				prefix_val_meta,
 				node->c.val_size,
-				prefix_val_meta + node->c.prefix_size);
-#endif
+				prefix_val_meta
+					+ VAL_ALIGN_PAD
+					+ node->c.prefix_size);
 			if (!newroot) {
 				if (tr->params.tr_buf_dynalloc) {
 					free(newroot);
@@ -282,39 +229,21 @@ next_byte:
   next['f'] => [i][x] - tail from old prefix
   next['p'] => [a][r][e] - tail from new prefix
 */
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-	if (prefix[pi] != *sym) {
-#else
 	if (prefix_val_meta[pi] != *sym) {
-#endif
 		TKVDB_MEMNODE_TYPE *newroot, *subnode_rest, *subnode_key;
 
 		/* split current node into 3 subnodes */
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-		newroot = TKVDB_IMPL_NODE_NEW(trns, 0, pi,
-			prefix, 0, NULL);
-#else
 		newroot = TKVDB_IMPL_NODE_NEW(trns, 0, pi,
 			prefix_val_meta, 0, NULL);
-#endif
 		if (!newroot) return TKVDB_ENOMEM;
 
 		/* rest of prefix (skip current symbol) */
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
-			node->c.type & (~TKVDB_NODE_LEAF),
-			node->c.prefix_size - pi - 1,
-			prefix + pi + 1,
-			node->c.val_size,
-			val_ptr);
-#else
 		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
 			node->c.type & (~TKVDB_NODE_LEAF),
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + node->c.prefix_size);
-#endif
+			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);
@@ -338,11 +267,7 @@ next_byte:
 			return TKVDB_ENOMEM;
 		}
 
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-		newroot->next[prefix[pi]] = subnode_rest;
-#else
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
-#endif
 		newroot->next[*sym] = subnode_key;
 
 		TKVDB_REPLACE_NODE(node, newroot);
@@ -355,5 +280,6 @@ next_byte:
 	goto next_byte;
 
 	return TKVDB_OK;
+#undef VAL_ALIGN_PAD
 }
 
