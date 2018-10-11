@@ -226,6 +226,7 @@ TKVDB_IMPL_CURSOR_LOAD_ROOT(tkvdb_cursor *cr)
 	tkvdb_tr_data *tr = c->tr->data;
 
 	if (!tr->root) {
+#ifndef TKVDB_PARAMS_NODBFILE
 		/* empty root node */
 		if (!tr->db) {
 			/* and no database file */
@@ -240,6 +241,9 @@ TKVDB_IMPL_CURSOR_LOAD_ROOT(tkvdb_cursor *cr)
 		TKVDB_EXEC( TKVDB_IMPL_NODE_READ(c->tr,
 			tr->db->info.footer.root_off,
 			(TKVDB_MEMNODE_TYPE **)&(tr->root)) );
+#else
+		return TKVDB_EMPTY;
+#endif
 	}
 
 	return TKVDB_OK;

@@ -42,12 +42,15 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 
 	/* new root */
 	if (tr->root == NULL) {
+#ifndef TKVDB_PARAMS_NODBFILE
 		if (tr->db && (tr->db->info.filesize > 0)) {
 			/* we have underlying non-empty db file */
 			TKVDB_EXEC( TKVDB_IMPL_NODE_READ(trns,
 				tr->db->info.footer.root_off,
 				((TKVDB_MEMNODE_TYPE **)&(tr->root))) );
-		} else {
+		} else 
+#endif
+		{
 			tr->root = TKVDB_IMPL_NODE_NEW(trns,
 				TKVDB_NODE_VAL | TKVDB_NODE_LEAF,
 				key->size, key->data, val->size, val->data);
@@ -193,7 +196,10 @@ next_byte:
 			node = node->next[*sym];
 			sym++;
 			goto next_node;
-		} else if (tr->db && (node->fnext[*sym] != 0)) {
+		}
+#ifndef TKVDB_PARAMS_NODBFILE
+		/* only if we have underlying db file */
+		else if (tr->db && (node->fnext[*sym] != 0)) {
 			TKVDB_MEMNODE_TYPE *tmp;
 
 			/* load subnode from disk */
@@ -204,7 +210,9 @@ next_byte:
 			node = tmp;
 			sym++;
 			goto next_node;
-		} else {
+		}
+#endif
+		else {
 			TKVDB_MEMNODE_TYPE *tmp;
 
 			/* allocate tail */

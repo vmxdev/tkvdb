@@ -44,8 +44,10 @@ typedef struct TKVDB_MEMNODE_TYPE
 
 	/* subnodes in memory */
 	void *next[256];
+#ifndef TKVDB_PARAMS_NODBFILE
 	/* positions of subnodes in file */
 	uint64_t fnext[256];
+#endif
 
 	unsigned char prefix_val_meta[1]; /* prefix, value and metadata */
 } TKVDB_MEMNODE_TYPE;
@@ -57,4 +59,61 @@ typedef struct TKVDB_MEMNODE_TYPE_LEAF
 
 	unsigned char prefix_val_meta[1]; /* prefix, value and metadata */
 } TKVDB_MEMNODE_TYPE_LEAF;
+
+/* get next subnode (or load from disk) */
+#ifndef TKVDB_PARAMS_NODBFILE
+
+#define TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF)                           \
+do {                                                                      \
+	tkvdb_tr_data *trd = TR->data;                                    \
+	if (NODE->c.type & TKVDB_NODE_LEAF) {                             \
+		break;                                                    \
+	}                                                                 \
+	if (NODE->next[OFF]) {                                            \
+		NEXT = node->next[OFF];                                   \
+	} else if (trd->db && NODE->fnext[OFF]) {                         \
+		TKVDB_MEMNODE_TYPE *tmp;                                  \
+		TKVDB_EXEC( TKVDB_IMPL_NODE_READ(TR, NODE->fnext[OFF],    \
+			&tmp) );                                          \
+		NODE->next[OFF] = tmp;                                    \
+		NEXT = tmp;                                               \
+	}                                                                 \
+} while (0)
+
+#else
+
+/* RAM-only */
+#define TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF)                           \
+do {                                                                      \
+	if (NODE->c.type & TKVDB_NODE_LEAF) {                             \
+		break;                                                    \
+	}                                                                 \
+	if (NODE->next[OFF]) {                                            \
+		NEXT = node->next[OFF];                                   \
+	}                                                                 \
+} while (0)
+
+#endif
+
+#define TKVDB_SUBNODE_SEARCH(TR, NODE, NEXT, OFF, INCR)                   \
+do {                                                                      \
+	int lim, step;                                                    \
+	NEXT = NULL;                                                      \
+	if (NODE->c.type & TKVDB_NODE_LEAF) {                             \
+		break;                                                    \
+	}                                                                 \
+	if (INCR) {                                                       \
+		lim = 256;                                                \
+		step = 1;                                                 \
+	} else {                                                          \
+		lim = -1;                                                 \
+		step = -1;                                                \
+	}                                                                 \
+	for (; OFF!=lim; OFF+=step) {                                     \
+		TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF);                  \
+		if (next) {                                               \
+			break;                                            \
+		}                                                         \
+	}                                                                 \
+} while (0)
 

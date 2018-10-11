@@ -190,46 +190,6 @@ typedef struct tkvdb_cursor_data
 	tkvdb_tr *tr;
 } tkvdb_cursor_data;
 
-/* get next subnode (or load from disk) */
-#define TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF)                           \
-do {                                                                      \
-	tkvdb_tr_data *trd = TR->data;                                    \
-	if (NODE->c.type & TKVDB_NODE_LEAF) {                             \
-		break;                                                    \
-	}                                                                 \
-	if (NODE->next[OFF]) {                                            \
-		NEXT = node->next[OFF];                                   \
-	} else if (trd->db && NODE->fnext[OFF]) {                         \
-		TKVDB_MEMNODE_TYPE *tmp;                                  \
-		TKVDB_EXEC( TKVDB_IMPL_NODE_READ(TR, NODE->fnext[OFF],    \
-			&tmp) );                                          \
-		NODE->next[OFF] = tmp;                                    \
-		NEXT = tmp;                                               \
-	}                                                                 \
-} while (0)
-
-#define TKVDB_SUBNODE_SEARCH(TR, NODE, NEXT, OFF, INCR)                   \
-do {                                                                      \
-	int lim, step;                                                    \
-	NEXT = NULL;                                                      \
-	if (NODE->c.type & TKVDB_NODE_LEAF) {                             \
-		break;                                                    \
-	}                                                                 \
-	if (INCR) {                                                       \
-		lim = 256;                                                \
-		step = 1;                                                 \
-	} else {                                                          \
-		lim = -1;                                                 \
-		step = -1;                                                \
-	}                                                                 \
-	for (; OFF!=lim; OFF+=step) {                                     \
-		TKVDB_SUBNODE_NEXT(TR, NODE, NEXT, OFF);                  \
-		if (next) {                                               \
-			break;                                            \
-		}                                                         \
-	}                                                                 \
-} while (0)
-
 
 static TKVDB_RES
 tkvdb_info_read(const int fd, struct tkvdb_db_info *info)
@@ -647,23 +607,46 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 	tr->mem = &tkvdb_tr_mem;
 
 	if (trdata->params.alignval > 1) {
-		tr->commit = &tkvdb_commit_alignval;
-		tr->rollback = &tkvdb_rollback_alignval;
+		if (db) {
+			tr->commit = &tkvdb_commit_alignval;
+			tr->rollback = &tkvdb_rollback_alignval;
 
-		tr->put = &tkvdb_put_alignval;
-		tr->get = &tkvdb_get_alignval;
-		tr->del = &tkvdb_del_alignval;
+			tr->put = &tkvdb_put_alignval;
+			tr->get = &tkvdb_get_alignval;
+			tr->del = &tkvdb_del_alignval;
 
-		tr->free = &tkvdb_tr_free_alignval;
+			tr->free = &tkvdb_tr_free_alignval;
+		} else {
+			/* RAM-only */
+			tr->commit = &tkvdb_commit_alignval_nodb;
+			tr->rollback = &tkvdb_rollback_alignval_nodb;
+
+			tr->put = &tkvdb_put_alignval_nodb;
+			tr->get = &tkvdb_get_alignval_nodb;
+			tr->del = &tkvdb_del_alignval_nodb;
+
+			tr->free = &tkvdb_tr_free_alignval_nodb;
+		}
 	} else {
-		tr->commit = &tkvdb_commit_generic;
-		tr->rollback = &tkvdb_rollback_generic;
+		if (db) {
+			tr->commit = &tkvdb_commit_generic;
+			tr->rollback = &tkvdb_rollback_generic;
 
-		tr->put = &tkvdb_put_generic;
-		tr->get = &tkvdb_get_generic;
-		tr->del = &tkvdb_del_generic;
+			tr->put = &tkvdb_put_generic;
+			tr->get = &tkvdb_get_generic;
+			tr->del = &tkvdb_del_generic;
 
-		tr->free = &tkvdb_tr_free_generic;
+			tr->free = &tkvdb_tr_free_generic;
+		} else {
+			tr->commit = &tkvdb_commit_generic_nodb;
+			tr->rollback = &tkvdb_rollback_generic_nodb;
+
+			tr->put = &tkvdb_put_generic_nodb;
+			tr->get = &tkvdb_get_generic_nodb;
+			tr->del = &tkvdb_del_generic_nodb;
+
+			tr->free = &tkvdb_tr_free_generic_nodb;
+		}
 	}
 
 	return tr;
@@ -717,19 +700,38 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 	c->free = &tkvdb_cursor_free;
 
 	if (trdata->params.alignval > 1) {
-		c->seek = &tkvdb_seek_alignval;
-		c->first = &tkvdb_first_alignval;
-		c->last = &tkvdb_last_alignval;
+		if (trdata->db) {
+			c->seek = &tkvdb_seek_alignval;
+			c->first = &tkvdb_first_alignval;
+			c->last = &tkvdb_last_alignval;
 
-		c->next = &tkvdb_next_alignval;
-		c->prev = &tkvdb_prev_alignval;
+			c->next = &tkvdb_next_alignval;
+			c->prev = &tkvdb_prev_alignval;
+		} else {
+			/* RAM-only */
+			c->seek = &tkvdb_seek_alignval_nodb;
+			c->first = &tkvdb_first_alignval_nodb;
+			c->last = &tkvdb_last_alignval_nodb;
+
+			c->next = &tkvdb_next_alignval_nodb;
+			c->prev = &tkvdb_prev_alignval_nodb;
+		}
 	} else {
-		c->seek = &tkvdb_seek_generic;
-		c->first = &tkvdb_first_generic;
-		c->last = &tkvdb_last_generic;
+		if (trdata->db) {
+			c->seek = &tkvdb_seek_generic;
+			c->first = &tkvdb_first_generic;
+			c->last = &tkvdb_last_generic;
 
-		c->next = &tkvdb_next_generic;
-		c->prev = &tkvdb_prev_generic;
+			c->next = &tkvdb_next_generic;
+			c->prev = &tkvdb_prev_generic;
+		} else {
+			c->seek = &tkvdb_seek_generic_nodb;
+			c->first = &tkvdb_first_generic_nodb;
+			c->last = &tkvdb_last_generic_nodb;
+
+			c->next = &tkvdb_next_generic_nodb;
+			c->prev = &tkvdb_prev_generic_nodb;
+		}
 	}
 
 

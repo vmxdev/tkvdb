@@ -22,7 +22,6 @@ TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 	unsigned char *prefix_val_meta;
 	size_t pi;
 	TKVDB_MEMNODE_TYPE *node = NULL;
-	uint64_t off;
 	tkvdb_tr_data *tr = trns->data;
 
 	if (!tr->started) {
@@ -31,12 +30,15 @@ TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 
 	/* check root */
 	if (tr->root == NULL) {
+#ifndef TKVDB_PARAMS_NODBFILE
 		if (tr->db && (tr->db->info.filesize > 0)) {
 			/* we have underlying non-empty db file */
 			TKVDB_EXEC( TKVDB_IMPL_NODE_READ(trns,
 				tr->db->info.footer.root_off,
 				(TKVDB_MEMNODE_TYPE **)&(tr->root)) );
-		} else {
+		} else
+#endif
+		{
 			return TKVDB_EMPTY;
 		}
 	}
@@ -83,8 +85,11 @@ next_byte:
 			node = node->next[*sym];
 			sym++;
 			goto next_node;
-		} else if (tr->db && (node->fnext[*sym] != 0)) {
+		}
+#ifndef TKVDB_PARAMS_NODBFILE
+		else if (tr->db && (node->fnext[*sym] != 0)) {
 			TKVDB_MEMNODE_TYPE *tmp;
+			uint64_t off;
 
 			/* load subnode from disk */
 			off = node->fnext[*sym];
@@ -94,7 +99,9 @@ next_byte:
 			node = tmp;
 			sym++;
 			goto next_node;
-		} else {
+		}
+#endif
+		else {
 			return TKVDB_NOT_FOUND;
 		}
 	}

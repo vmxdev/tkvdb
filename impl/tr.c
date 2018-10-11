@@ -62,6 +62,7 @@ TKVDB_IMPL_ROLLBACK(tkvdb_tr *tr)
 
 
 /* compact node and put it to write buffer */
+#ifndef TKVDB_PARAMS_NODBFILE
 static TKVDB_RES
 TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 	uint64_t transaction_off)
@@ -151,8 +152,10 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 
 	return TKVDB_OK;
 }
+#endif
 
 /* calculate size of node on disk */
+#ifndef TKVDB_PARAMS_NODBFILE
 static void
 TKVDB_IMPL_NODE_CALC_DISKSIZE(TKVDB_MEMNODE_TYPE *node)
 {
@@ -191,8 +194,11 @@ TKVDB_IMPL_NODE_CALC_DISKSIZE(TKVDB_MEMNODE_TYPE *node)
 	node->c.disk_size += node->c.prefix_size + node->c.val_size
 		+ node->c.meta_size;
 }
+#endif
+
 
 /* commit */
+#ifndef TKVDB_PARAMS_NODBFILE
 static TKVDB_RES
 TKVDB_IMPL_DO_COMMIT(tkvdb_tr *trns, struct tkvdb_db_info *vacdbinfo)
 {
@@ -416,4 +422,15 @@ TKVDB_IMPL_COMMIT(tkvdb_tr *tr)
 {
 	return TKVDB_IMPL_DO_COMMIT(tr, NULL);
 }
+#endif
 
+
+/* RAM-only */
+#ifdef TKVDB_PARAMS_NODBFILE
+static TKVDB_RES
+TKVDB_IMPL_COMMIT(tkvdb_tr *tr)
+{
+	(void)tr;
+	return TKVDB_OK;
+}
+#endif

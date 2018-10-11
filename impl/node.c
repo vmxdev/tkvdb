@@ -151,7 +151,9 @@ do {                                                                       \
 		}
 
 		memset(node->next, 0, sizeof(TKVDB_MEMNODE_TYPE *) * 256);
+#ifndef TKVDB_PARAMS_NODBFILE
 		memset(node->fnext, 0, sizeof(uint64_t) * 256);
+#endif
 		ret = node;
 	}
 
@@ -167,15 +169,20 @@ TKVDB_IMPL_CLONE_SUBNODES(TKVDB_MEMNODE_TYPE *dst, TKVDB_MEMNODE_TYPE *src)
 {
 	if (src->c.type & TKVDB_NODE_LEAF) {
 		memset(dst->next, 0, sizeof(void *) * 256);
+#ifndef TKVDB_PARAMS_NODBFILE
 		memset(dst->fnext, 0, sizeof(uint64_t) * 256);
+#endif
 	} else {
 		memcpy(dst->next,  src->next,
 			sizeof(TKVDB_MEMNODE_TYPE *) * 256);
+#ifndef TKVDB_PARAMS_NODBFILE
 		memcpy(dst->fnext, src->fnext, sizeof(uint64_t) * 256);
+#endif
 	}
 }
 
 /* read node from disk */
+#ifndef TKVDB_PARAMS_NODBFILE
 static TKVDB_RES
 TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 	uint64_t off, TKVDB_MEMNODE_TYPE **node_ptr)
@@ -295,7 +302,6 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 
 			offptr = (uint64_t *)(ptr
 				+ disknode->nsubnodes * sizeof(uint8_t));
-
 			memset((*node_ptr)->fnext, 0, sizeof(uint64_t) * 256);
 
 			for (i=0; i<disknode->nsubnodes; i++) {
@@ -337,6 +343,9 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 #undef PTR_TO_VAL
 #undef VALPADDING
 }
+
+#endif
+/* no NODE_READ function in RAM-only mode */
 
 /* free node and subnodes */
 static void
