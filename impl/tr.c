@@ -430,7 +430,8 @@ TKVDB_IMPL_COMMIT(tkvdb_tr *tr)
 static TKVDB_RES
 TKVDB_IMPL_COMMIT(tkvdb_tr *tr)
 {
-	(void)tr;
+	TKVDB_IMPL_TR_RESET(tr);
+
 	return TKVDB_OK;
 }
 #endif
