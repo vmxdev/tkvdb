@@ -1,2 +1,2 @@
 # Column-oriented storage
-(in planning stage)
+(at the planning stage, may be removed)
