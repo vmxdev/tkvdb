@@ -7,6 +7,13 @@
 
 enum COLORST_TOKEN
 {
+	COLORST_BEGIN,
+	COLORST_COMMIT,
+	COLORST_ROLLBACK,
+
+	COLORST_CREATE,
+	COLORST_COLLECTION,
+
 	COLORST_INSERT,
 	COLORST_INTO,
 	COLORST_VALUE,
@@ -57,6 +64,7 @@ struct input
 
 void read_token(struct input *i);
 void parse_query(struct input *i);
+void mkerror(struct input *i, char *msg);
 
 #endif
 

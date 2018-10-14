@@ -6,19 +6,6 @@
 
 #include "colorst_impl.h"
 
-static void
-mkerror(struct input *i, char *msg)
-{
-	i->error = 1;
-
-	if (i->line > 1) {
-		snprintf(i->errmsg, i->msgsize, "Line %d, col %d: %s",
-			i->line, i->col, msg);
-	} else {
-		snprintf(i->errmsg, i->msgsize, "Col: %d: %s", i->col, msg);
-	}
-}
-
 static int
 is_idsym(int c)
 {
@@ -117,6 +104,13 @@ again:
 		i->current_token.id = TOKEN;             \
 	}
 		if (0) {}
+		SCAN_STRING("begin", COLORST_BEGIN)
+		SCAN_STRING("commit", COLORST_COMMIT)
+		SCAN_STRING("rollback", COLORST_ROLLBACK)
+
+		SCAN_STRING("create", COLORST_CREATE)
+		SCAN_STRING("collection", COLORST_COLLECTION)
+
 		SCAN_STRING("insert", COLORST_INSERT)
 		SCAN_STRING("into", COLORST_INTO)
 		SCAN_STRING("value", COLORST_VALUE)

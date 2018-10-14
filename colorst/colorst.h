@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 
+/* statement */
 typedef struct colorst colorst;
 
 struct colorst

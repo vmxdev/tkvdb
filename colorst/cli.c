@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "colorst.h"
 
@@ -9,13 +11,23 @@ main()
 	colorst *c;
 	int ret;
 	char err[512];
+	char *input;
 
-	c = colorst_create("insert into aaa value bbb: \"d\\\"ef\"",
-		&ret, err, sizeof(err));
+	for(;;) {
+		input = readline("$ ");
+		if (!input) {
+			break;
+		}
+		add_history(input);
 
-	if (!c) {
-		printf("exiting on error\n");
-		return EXIT_FAILURE;
+		c = colorst_create(input, &ret, err, sizeof(err));
+
+		if (!c) {
+			printf("Error: %s\n", err);
+		} else {
+			c->free(c);
+		}
+		free(input);
 	}
 
 	return EXIT_SUCCESS;

@@ -18,6 +18,7 @@ colorst_create(const char *query, int *retcode, char *message, size_t msgsize)
 		goto malloc_fail;
 	}
 
+	c->data = NULL;
 	if (!colorst_prepare(c, query, message, msgsize)) {
 		goto prepare_fail;
 	}
@@ -67,3 +68,15 @@ colorst_prepare(colorst *c, const char *query, char *message, size_t msgsize)
 	return 1;
 }
 
+void
+mkerror(struct input *i, char *msg)
+{
+	i->error = 1;
+
+	if (i->line > 1) {
+		snprintf(i->errmsg, i->msgsize, "Line %d, col %d: %s",
+			i->line, i->col, msg);
+	} else {
+		snprintf(i->errmsg, i->msgsize, "Col: %d: %s", i->col, msg);
+	}
+}
