@@ -20,7 +20,7 @@ struct colorst
 };
 
 colorst *colorst_create(const char *query,
-	int *retcode, char *message, size_t msgsize);
+	int *retcode, char *msg, size_t msgsize);
 
 #ifdef __cplusplus
 }
