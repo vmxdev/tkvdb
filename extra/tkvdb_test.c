@@ -168,9 +168,18 @@ test_iter(void)
 	tkvdb_cursor *c;
 	size_t i;
 	int r;
+	tkvdb_params *params;
 
-	db = tkvdb_open(fn, NULL);
+	params = tkvdb_params_create();
+	TEST_CHECK(params != NULL);
+	if (test_aligned) {
+		tkvdb_param_set(params, TKVDB_PARAM_ALIGNVAL, VAL_ALIGNMENT);
+	}
+
+	db = tkvdb_open(fn, params);
 	TEST_CHECK(db != NULL);
+	tkvdb_params_free(params);
+
 	tr = tkvdb_tr_create(db, NULL);
 	TEST_CHECK(tr != NULL);
 
@@ -183,8 +192,17 @@ test_iter(void)
 	TEST_CHECK(c->first(c) == TKVDB_OK);
 	i = 0;
 	do {
+		/* check key */
 		TEST_CHECK(memcmp(c->key(c), kvs[i].key,
 			c->keysize(c)) == 0);
+		/* and value */
+		TEST_CHECK(memcmp(c->val(c), kvs[i].val,
+			c->valsize(c)) == 0);
+
+		if (test_aligned) {
+			TEST_CHECK((uintptr_t)c->val(c) % VAL_ALIGNMENT == 0);
+		}
+
 		i++;
 	} while ((r = c->next(c)) == TKVDB_OK);
 
@@ -196,6 +214,13 @@ test_iter(void)
 	do {
 		TEST_CHECK(memcmp(c->key(c), kvs[N - i - 1].key,
 			c->keysize(c)) == 0);
+		TEST_CHECK(memcmp(c->val(c), kvs[N - i - 1].val,
+			c->valsize(c)) == 0);
+
+		if (test_aligned) {
+			TEST_CHECK((uintptr_t)c->val(c) % VAL_ALIGNMENT == 0);
+		}
+
 		i++;
 	} while (c->prev(c) == TKVDB_OK);
 
@@ -218,9 +243,18 @@ test_seek(void)
 	size_t i;
 	const size_t NITER = 1000;
 	tkvdb_datum dtk;
+	tkvdb_params *params;
 
-	db = tkvdb_open(fn, NULL);
+	params = tkvdb_params_create();
+	TEST_CHECK(params != NULL);
+	if (test_aligned) {
+		tkvdb_param_set(params, TKVDB_PARAM_ALIGNVAL, VAL_ALIGNMENT);
+	}
+
+	db = tkvdb_open(fn, params);
 	TEST_CHECK(db != NULL);
+	tkvdb_params_free(params);
+
 	tr = tkvdb_tr_create(db, NULL);
 	TEST_CHECK(tr != NULL);
 
@@ -240,6 +274,14 @@ test_seek(void)
 		dtk.size = kvs[idx].klen;
 		r = c->seek(c, &dtk, TKVDB_SEEK_EQ);
 		TEST_CHECK(r == TKVDB_OK);
+
+		TEST_CHECK(memcmp(c->key(c), kvs[idx].key,
+			c->keysize(c)) == 0);
+		TEST_CHECK(memcmp(c->val(c), kvs[idx].val,
+			c->valsize(c)) == 0);
+		if (test_aligned) {
+			TEST_CHECK((uintptr_t)c->val(c) % VAL_ALIGNMENT == 0);
+		}
 	}
 
 	/* nonexistent */
@@ -500,6 +542,17 @@ test_get_put_aligned(void)
 	test_get();
 }
 
+void
+test_dbtrav_aligned(void)
+{
+	test_aligned = 1;
+
+	test_iter();
+	test_seek();
+
+	test_aligned = 0;
+}
+
 /* RAM-only transaction size vs transaction with underlying DB size */
 void
 test_ram_mem(void)
@@ -630,6 +683,7 @@ TEST_LIST = {
 	{ "random seeks", test_seek },
 	{ "get", test_get },
 	{ "get/put aligned", test_get_put_aligned },
+	{ "db traversal aligned", test_dbtrav_aligned },
 	{ "delete", test_del },
 	{ "ram-only memory usage", test_ram_mem },
 	/*{ "vacuum", test_vacuum },*/

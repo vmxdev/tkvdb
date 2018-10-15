@@ -19,6 +19,37 @@
 
 /* cursors */
 
+#ifdef TKVDB_PARAMS_ALIGN_VAL
+
+#define CURSOR_UPDATE_VAL()                                                  \
+do {                                                                         \
+	c->val_size = node->c.val_size;                                      \
+	if (node->c.type & TKVDB_NODE_LEAF) {                                \
+		c->val = ((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta  \
+			+ node->c.prefix_size + node->c.val_pad;             \
+	} else {                                                             \
+		c->val = node->prefix_val_meta                               \
+			+ node->c.prefix_size + node->c.val_pad;             \
+	}                                                                    \
+} while (0)
+
+#else
+
+#define CURSOR_UPDATE_VAL()                                                  \
+do {                                                                         \
+	c->val_size = node->c.val_size;                                      \
+	if (node->c.type & TKVDB_NODE_LEAF) {                                \
+		c->val = ((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta  \
+			+ node->c.prefix_size;                               \
+	} else {                                                             \
+		c->val = node->prefix_val_meta                               \
+			+ node->c.prefix_size;                               \
+	}                                                                    \
+} while (0)
+
+
+#endif
+
 /* add (push) node to cursor */
 static int
 TKVDB_IMPL_CURSOR_PUSH(tkvdb_cursor *cr, TKVDB_MEMNODE_TYPE *node, int off)
@@ -29,13 +60,7 @@ TKVDB_IMPL_CURSOR_PUSH(tkvdb_cursor *cr, TKVDB_MEMNODE_TYPE *node, int off)
 	c->stack[c->stack_size].off = off;
 	c->stack_size++;
 
-	c->val_size = node->c.val_size;
-	if (node->c.type & TKVDB_NODE_LEAF) {
-		c->val = ((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta
-			+ node->c.prefix_size;
-	} else {
-		c->val = node->prefix_val_meta + node->c.prefix_size;
-	}
+	CURSOR_UPDATE_VAL();
 
 	return TKVDB_OK;
 }
@@ -62,16 +87,11 @@ TKVDB_IMPL_CURSOR_POP(tkvdb_cursor *cr)
 
 	c->stack_size--;
 
-	c->val_size = node->c.val_size;
-	if (node->c.type & TKVDB_NODE_LEAF) {
-		c->val = ((TKVDB_MEMNODE_TYPE_LEAF *)node)->prefix_val_meta
-			+ node->c.prefix_size;
-	} else {
-		c->val = node->prefix_val_meta + node->c.prefix_size;
-	}
+	CURSOR_UPDATE_VAL();
 
 	return TKVDB_OK;
 }
+
 
 static TKVDB_RES
 TKVDB_IMPL_CURSOR_APPEND(tkvdb_cursor *cr, uint8_t *str, size_t n)
@@ -354,6 +374,8 @@ TKVDB_IMPL_PREV(tkvdb_cursor *cr)
 		TKVDB_EXEC( TKVDB_IMPL_CURSOR_POP(cr) );
 	}
 
+	CURSOR_UPDATE_VAL();
+
 	return TKVDB_OK;
 }
 
@@ -500,4 +522,6 @@ next_byte:
 	/* unreachable */
 	return TKVDB_OK;
 }
+
+#undef CURSOR_UPDATE_VAL
 
