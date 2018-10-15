@@ -49,7 +49,7 @@ keycmp(const void *m1, const void *m2)
 
 
 static void
-gen_rand()
+gen_rand(void)
 {
 	size_t i, j;
 
@@ -80,7 +80,7 @@ gen_rand()
 }
 
 static void
-test_init()
+test_init(void)
 {
 	gen_rand();
 }
@@ -123,9 +123,18 @@ test_fill_db(void)
 	tkvdb *db;
 	tkvdb_tr *tr;
 	size_t i, j;
+	tkvdb_params *params;
 
-	db = tkvdb_open(fn, NULL);
+	params = tkvdb_params_create();
+	TEST_CHECK(params != NULL);
+	if (test_aligned) {
+		tkvdb_param_set(params, TKVDB_PARAM_ALIGNVAL, VAL_ALIGNMENT);
+	}
+
+	db = tkvdb_open(fn, params);
 	TEST_CHECK(db != NULL);
+	tkvdb_params_free(params);
+
 	tr = tkvdb_tr_create(db, NULL);
 	TEST_CHECK(tr != NULL);
 
@@ -467,11 +476,88 @@ test_get(void)
 }
 
 void
-test_get_aligned(void)
+test_get_put_aligned(void)
 {
+	const char fn[] = "data_test.tkv";
+
+	/* read from database, it was filled with transactions in non-aligned
+	   mode */
 	test_aligned = 1;
 	test_get();
 	test_aligned = 0;
+
+	/* remove data file */
+	TEST_CHECK(unlink(fn) == 0);
+
+	/* fill database again using transactions with aligned data */
+	test_aligned = 1;
+	test_fill_db();
+	/* test aligned reads */
+	test_get();
+
+	/* non-aligned reads */
+	test_aligned = 0;
+	test_get();
+}
+
+/* RAM-only transaction size vs transaction with underlying DB size */
+void
+test_ram_mem(void)
+{
+	const char fn[] = "data_test.tkv";
+	tkvdb *db;
+	tkvdb_tr *trdb, *trram;
+	int i;
+	char strkey[20];
+	size_t memdb, memram;
+
+	db = tkvdb_open(fn, NULL);
+	TEST_CHECK(db != NULL);
+
+	trdb = tkvdb_tr_create(db, NULL);
+	TEST_CHECK(trdb != NULL);
+
+	/* fill DB-transaction */
+	TEST_CHECK(trdb->begin(trdb) == TKVDB_OK);
+	for (i=0; i<N; i++) {
+		tkvdb_datum key, val;
+
+		snprintf(strkey, sizeof(strkey), "%d", i);
+		key.data = strkey;
+		key.size = strlen(strkey);
+		val.data = &i;
+		val.size = sizeof(int);
+		TEST_CHECK(trdb->put(trdb, &key, &val) == TKVDB_OK);
+	}
+	/* get memory used by transaction */
+	memdb = trdb->mem(trdb);
+
+	TEST_CHECK(trdb->rollback(trdb) == TKVDB_OK);
+
+	trdb->free(trdb);
+	tkvdb_close(db);
+
+	/* RAM-only transaction with the same data */
+	trram = tkvdb_tr_create(NULL, NULL);
+	TEST_CHECK(trram != NULL);
+
+	TEST_CHECK(trram->begin(trram) == TKVDB_OK);
+	for (i=0; i<N; i++) {
+		tkvdb_datum key, val;
+
+		snprintf(strkey, sizeof(strkey), "%d", i);
+		key.data = strkey;
+		key.size = strlen(strkey);
+		val.data = &i;
+		val.size = sizeof(int);
+		TEST_CHECK(trram->put(trram, &key, &val) == TKVDB_OK);
+	}
+	memram = trram->mem(trram);
+
+	TEST_CHECK(trram->rollback(trram) == TKVDB_OK);
+	trram->free(trram);
+
+	TEST_CHECK(memram < memdb);
 }
 
 #if 0
@@ -543,8 +629,9 @@ TEST_LIST = {
 	{ "first/last and next/prev", test_iter },
 	{ "random seeks", test_seek },
 	{ "get", test_get },
-	{ "get aligned", test_get_aligned },
+	{ "get/put aligned", test_get_put_aligned },
 	{ "delete", test_del },
+	{ "ram-only memory usage", test_ram_mem },
 	/*{ "vacuum", test_vacuum },*/
 	{ 0 }
 };
