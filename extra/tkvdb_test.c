@@ -241,7 +241,7 @@ test_seek(void)
 	tkvdb_tr *tr;
 	tkvdb_cursor *c;
 	size_t i;
-	const size_t NITER = 1000;
+	const size_t NITER = 10000;
 	tkvdb_datum dtk;
 	tkvdb_params *params;
 
@@ -338,7 +338,15 @@ test_seek(void)
 			TEST_CHECK(r == TKVDB_OK);
 			dat_db.klen = c->keysize(c);
 			memcpy(dat_db.key, c->key(c), dat_db.klen);
+
 			TEST_CHECK(keycmp(&dat_db, &kvs[kidx]) == 0);
+
+			TEST_CHECK(memcmp(c->val(c), kvs[kidx].val,
+				c->valsize(c)) == 0);
+
+			if (test_aligned) {
+				TEST_CHECK((uintptr_t)c->val(c) % VAL_ALIGNMENT == 0);
+			}
 		} else {
 			TEST_CHECK(r == TKVDB_NOT_FOUND);
 		}
@@ -356,7 +364,7 @@ test_seek(void)
 			search.key[j] = rand();
 		}
 
-		/* search for greater or equal key in memory */
+		/* search for equal or greater key in memory */
 		for (kidx=N; kidx-- > 0; ) {
 			int cmpres = keycmp(&search, &kvs[kidx]);
 			if (cmpres == 0) {
@@ -370,18 +378,22 @@ test_seek(void)
 		if (kidx < 0) {
 			kidx++;
 		}
-		if (kidx == N) {
-			kidx--;
-		}
 
 		dtk.data = search.key;
 		dtk.size = search.klen;
 		r = c->seek(c, &dtk, TKVDB_SEEK_GE);
-		if ((kidx >= 0) && (kidx < (N - 1))) {
+		if ((kidx >= 0) && (kidx < N)) {
 			TEST_CHECK(r == TKVDB_OK);
 			dat_db.klen = c->keysize(c);
 			memcpy(dat_db.key, c->key(c), dat_db.klen);
 			TEST_CHECK(keycmp(&dat_db, &kvs[kidx]) == 0);
+
+			TEST_CHECK(memcmp(c->val(c), kvs[kidx].val,
+				c->valsize(c)) == 0);
+
+			if (test_aligned) {
+				TEST_CHECK((uintptr_t)c->val(c) % VAL_ALIGNMENT == 0);
+			}
 		} else {
 			TEST_CHECK(r == TKVDB_NOT_FOUND);
 		}
