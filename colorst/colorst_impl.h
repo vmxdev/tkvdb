@@ -3,8 +3,11 @@
 
 #include <stdint.h>
 
+#include "colorst.h"
+
 #define TOKEN_MAX_SIZE  512
 
+/* grammar tokens */
 enum COLORST_TOKEN
 {
 	COLORST_BEGIN,
@@ -40,12 +43,24 @@ enum COLORST_TOKEN
 	COLORST_COLON
 };
 
+/* prefix in DB (casted to uint32_t) */
+enum COLORST_PREFIX
+{
+	COLORST_PREFIX_COLLECTIONS,        /* set of collections */
+	COLORST_PREFIX_FIELDS              /* fields */
+};
+
 struct token
 {
 	enum COLORST_TOKEN id;
 
 	char str[TOKEN_MAX_SIZE + 1];
 	int64_t num;
+};
+
+struct colorst_data
+{
+	tkvdb_tr *tr;
 };
 
 /* query */
@@ -60,11 +75,16 @@ struct input
 	size_t msgsize;
 
 	struct token current_token;
+
+	/* pass data to parser */
+	struct colorst_data *data;
 };
+
 
 void read_token(struct input *i);
 void parse_query(struct input *i);
 void mkerror(struct input *i, char *msg);
+int  colorst_create_collection(tkvdb_tr *tr, const char *coll_name, char *msg);
 
 #endif
 

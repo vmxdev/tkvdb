@@ -8,6 +8,9 @@ accept(struct input *i, enum COLORST_TOKEN token)
 {
 	if (i->current_token.id == token) {
 		read_token(i);
+		if (i->error) {
+			return 0;
+		}
 		return 1;
 	}
 	return 0;
@@ -51,6 +54,7 @@ static void
 create_collection(struct input *i)
 {
 	char collection[TOKEN_MAX_SIZE];
+	char msg[TOKEN_MAX_SIZE];
 
 	if (!expect(i, COLORST_COLLECTION)) {
 		mkerror(i, "Expected COLLECTION after CREATE");
@@ -62,7 +66,9 @@ create_collection(struct input *i)
 		mkerror(i, "Expected collection name after CREATE COLLECTION");
 		return;
 	}
-	printf("CREATE COLLECTION\n");
+
+	colorst_create_collection(i->data->tr, collection, msg);
+	printf("%s\n", msg);
 }
 
 void
@@ -76,7 +82,7 @@ parse_query(struct input *i)
 	} else if (accept(i, COLORST_SELECT)) {
 	} else if (accept(i, COLORST_UPDATE)) {
 	} else {
-		mkerror(i, "Unexpected operator");
+		mkerror(i, "Unexpected token");
 	}
 }
 

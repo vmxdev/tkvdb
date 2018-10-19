@@ -12,7 +12,10 @@ main()
 	int ret;
 	char err[512];
 	char *input;
+	tkvdb_tr *tr = NULL;
 
+	tr = tkvdb_tr_create(NULL, NULL);
+	tr->begin(tr);
 	for(;;) {
 		input = readline("$ ");
 		if (!input) {
@@ -20,7 +23,7 @@ main()
 		}
 		add_history(input);
 
-		c = colorst_create(input, &ret, err, sizeof(err));
+		c = colorst_create(input, tr, &ret, err, sizeof(err));
 
 		if (!c) {
 			printf("Error: %s\n", err);

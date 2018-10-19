@@ -1,6 +1,8 @@
 #ifndef colorst_h_included
 #define colorst_h_included
 
+#include "tkvdb.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,7 +22,7 @@ struct colorst
 	void *data;
 };
 
-colorst *colorst_create(const char *query,
+colorst *colorst_create(const char *query, tkvdb_tr *tr,
 	int *retcode, char *msg, size_t msgsize);
 
 #ifdef __cplusplus
