@@ -27,6 +27,67 @@ expect(struct input *i, enum COLORST_TOKEN token)
 }
 
 static void
+json_like_value(struct input *i, int object)
+{
+	for (;;) {
+		char field[TOKEN_MAX_SIZE];
+
+		strncpy(field, i->current_token.str, sizeof(field));
+		if (!expect(i, COLORST_ID)) {
+			mkerror(i,
+				"Expected field name");
+			return;
+		}
+		if (!expect(i, COLORST_COLON)) {
+			mkerror(i,
+				"Expected ':' after field name");
+			return;
+		}
+
+		printf("field: %s: ", field);
+		if (accept(i, COLORST_ID)) {
+			printf("id\n");
+		} else if (accept(i, COLORST_INT)) {
+			printf("int\n");
+		} else if (accept(i, COLORST_STRING)) {
+			printf("string\n");
+		} else if (accept(i, COLORST_CURLY_BRACKET_OPEN)) {
+			printf("object\n");
+			json_like_value(i, 1);
+		} else {
+			mkerror(i,
+				"Expected ID, integer, string or object"
+				" after ':'");
+			return;
+		}
+
+		if (accept(i, COLORST_COMMA)) {
+			continue;
+		}
+
+		if (object) {
+			if (accept(i, COLORST_CURLY_BRACKET_CLOSE)) {
+				/* end of object */
+				printf("end of object\n");
+				break;
+			}
+		}
+
+		if (i->eof) {
+			break;
+		}
+
+
+		/* not eof, not comma */
+
+		printf("error! token %s\n", i->current_token.str);
+		mkerror(i,
+			"Expected comma or EOF after field and value");
+		return;
+	}
+}
+
+static void
 insert(struct input *i)
 {
 	char collection[TOKEN_MAX_SIZE];
@@ -48,6 +109,8 @@ insert(struct input *i)
 			"Expected VALUE after INSERT INTO COLLECTION");
 		return;
 	}
+
+	json_like_value(i, 0);
 }
 
 static void

@@ -141,13 +141,12 @@ again:
 	/* string */
 	if (*(i->s) == '\"') {
 		size_t l = 0;
-		int escaped;
+		int escaped = 0;
 
 		i->current_token.id = COLORST_STRING_INCOMPLETE;
 		NEXT_SYMBOL();
 		CHECK_EOF();
-		do {
-			escaped = 0;
+		while (!((*(i->s) == '\"') && !escaped)) {
 			if (*(i->s) == '\\') {
 				NEXT_SYMBOL();
 				BREAK_IF_EOF();
@@ -162,7 +161,7 @@ again:
 			}
 			NEXT_SYMBOL();
 			BREAK_IF_EOF();
-		} while (!((*(i->s) == '\"') && !escaped));
+		}
 
 		if (*(i->s) != '\"') {
 			mkerror(i, "Incorrect string token");
@@ -188,6 +187,8 @@ again:
 	SINGLE_SYM_TOKEN('-', COLORST_MINUS);
 	SINGLE_SYM_TOKEN('+', COLORST_PLUS);
 	SINGLE_SYM_TOKEN(':', COLORST_COLON);
+	SINGLE_SYM_TOKEN('{', COLORST_CURLY_BRACKET_OPEN);
+	SINGLE_SYM_TOKEN('}', COLORST_CURLY_BRACKET_CLOSE);
 
 #undef SINGLE_SYM_TOKEN
 #undef SCAN_UNTIL
