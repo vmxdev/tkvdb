@@ -53,11 +53,38 @@ enum COLORST_PREFIX
 	COLORST_PREFIX_FIELDS              /* fields */
 };
 
+enum COLORST_FIELD_TYPE
+{
+	COLORST_FIELD_ID,
+	COLORST_FIELD_INT,
+	COLORST_FIELD_STRING
+};
+
+/* field (name + value) and fields list */
+struct field
+{
+	enum COLORST_FIELD_TYPE type;
+
+	size_t namesize;
+	char name[TOKEN_MAX_SIZE];
+
+	size_t valsize;
+	char val[1];
+};
+
+struct fields_list
+{
+	char prefix[TOKEN_MAX_SIZE];
+
+	size_t nfields;
+	struct field *fields;
+};
+
 struct token
 {
 	enum COLORST_TOKEN id;
 
-	char str[TOKEN_MAX_SIZE + 1];
+	char str[TOKEN_MAX_SIZE];
 	int64_t num;
 };
 
@@ -79,6 +106,8 @@ struct input
 
 	struct token current_token;
 
+	struct fields_list fl;
+
 	/* pass data to parser */
 	struct colorst_data *data;
 };
@@ -88,6 +117,7 @@ void read_token(struct input *i);
 void parse_query(struct input *i);
 void mkerror(struct input *i, char *msg);
 int  colorst_create_collection(tkvdb_tr *tr, const char *coll_name, char *msg);
+int colorst_prepare_insert(struct input *i);
 
 #endif
 

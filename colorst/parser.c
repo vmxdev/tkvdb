@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "colorst_impl.h"
 
@@ -27,12 +28,22 @@ expect(struct input *i, enum COLORST_TOKEN token)
 }
 
 static void
-json_like_value(struct input *i, int object)
+json_like_value(struct input *i, int object, size_t prefixsize)
 {
 	for (;;) {
-		char field[TOKEN_MAX_SIZE];
+		char fullfieldname[TOKEN_MAX_SIZE], fieldname[TOKEN_MAX_SIZE];
+		struct field *tmpfields;
+		size_t fidx, fieldsize;
 
-		strncpy(field, i->current_token.str, sizeof(field));
+		fieldsize = strlen(i->current_token.str);
+		memcpy(fieldname, i->current_token.str, fieldsize);
+
+		if (prefixsize) {
+			memcpy(fullfieldname, i->fl.prefix, prefixsize);
+		}
+		memcpy(fullfieldname + prefixsize, fieldname, fieldsize);
+		fullfieldname[prefixsize + fieldsize] = '\0';
+
 		if (!expect(i, COLORST_ID)) {
 			mkerror(i,
 				"Expected field name");
@@ -44,16 +55,40 @@ json_like_value(struct input *i, int object)
 			return;
 		}
 
-		printf("field: %s: ", field);
+		/* add field to list */
+		printf("field: %s: ", fullfieldname);
+		tmpfields = realloc(i->fl.fields, sizeof(struct field)
+			* (i->fl.nfields + 1));
+		if (!tmpfields) {
+			mkerror(i, "Insufficient memory");
+			return;
+		}
+		i->fl.fields = tmpfields;
+		fidx = i->fl.nfields;
+		i->fl.nfields++;
+
+		i->fl.fields[fidx].namesize = prefixsize + fieldsize;
+		memcpy(i->fl.fields[fidx].name, fullfieldname,
+			i->fl.fields[fidx].namesize);
+
 		if (accept(i, COLORST_ID)) {
+			i->fl.fields[fidx].type = COLORST_FIELD_ID;
 			printf("id\n");
 		} else if (accept(i, COLORST_INT)) {
+			i->fl.fields[fidx].type = COLORST_FIELD_INT;
 			printf("int\n");
 		} else if (accept(i, COLORST_STRING)) {
+			i->fl.fields[fidx].type = COLORST_FIELD_STRING;
 			printf("string\n");
 		} else if (accept(i, COLORST_CURLY_BRACKET_OPEN)) {
 			printf("object\n");
-			json_like_value(i, 1);
+			/* append prefix */
+			memcpy(i->fl.prefix + prefixsize,
+				fieldname, fieldsize);
+			/* and dot */
+			i->fl.prefix[prefixsize + fieldsize] = '.';
+
+			json_like_value(i, 1, prefixsize + fieldsize + 1);
 		} else {
 			mkerror(i,
 				"Expected ID, integer, string or object"
@@ -79,8 +114,6 @@ json_like_value(struct input *i, int object)
 
 
 		/* not eof, not comma */
-
-		printf("error! token %s\n", i->current_token.str);
 		mkerror(i,
 			"Expected comma or EOF after field and value");
 		return;
@@ -110,7 +143,12 @@ insert(struct input *i)
 		return;
 	}
 
-	json_like_value(i, 0);
+	json_like_value(i, 0, 0);
+	if (i->error) {
+		return;
+	}
+
+	colorst_prepare_insert(i);
 }
 
 static void

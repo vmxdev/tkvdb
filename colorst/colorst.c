@@ -69,6 +69,9 @@ colorst_prepare(colorst *c, const char *query, char *message, size_t msgsize)
 	i.errmsg = message;
 	i.msgsize = msgsize;
 
+	i.fl.fields = NULL;
+	i.fl.nfields = 0;
+
 	i.data = c->data;
 
 	parse_query(&i);
