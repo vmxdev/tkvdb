@@ -30,6 +30,10 @@ expect(struct input *i, enum COLORST_TOKEN token)
 static void
 json_like_value(struct input *i, int object, size_t prefixsize)
 {
+	struct colorst_data *data;
+
+	data = i->data;
+
 	for (;;) {
 		char fullfieldname[TOKEN_MAX_SIZE], fieldname[TOKEN_MAX_SIZE];
 		struct field *tmpfields;
@@ -39,7 +43,7 @@ json_like_value(struct input *i, int object, size_t prefixsize)
 		memcpy(fieldname, i->current_token.str, fieldsize);
 
 		if (prefixsize) {
-			memcpy(fullfieldname, i->fl.prefix, prefixsize);
+			memcpy(fullfieldname, data->fl.prefix, prefixsize);
 		}
 		memcpy(fullfieldname + prefixsize, fieldname, fieldsize);
 		fullfieldname[prefixsize + fieldsize] = '\0';
@@ -56,37 +60,35 @@ json_like_value(struct input *i, int object, size_t prefixsize)
 		}
 
 		/* add field to list */
-		printf("field: %s: ", fullfieldname);
-		tmpfields = realloc(i->fl.fields, sizeof(struct field)
-			* (i->fl.nfields + 1));
+		tmpfields = realloc(data->fl.fields, sizeof(struct field)
+			* (data->fl.nfields + 1));
 		if (!tmpfields) {
 			mkerror(i, "Insufficient memory");
 			return;
 		}
-		i->fl.fields = tmpfields;
-		fidx = i->fl.nfields;
-		i->fl.nfields++;
+		data->fl.fields = tmpfields;
+		fidx = data->fl.nfields;
+		data->fl.nfields++;
 
-		i->fl.fields[fidx].namesize = prefixsize + fieldsize;
-		memcpy(i->fl.fields[fidx].name, fullfieldname,
-			i->fl.fields[fidx].namesize);
+		data->fl.fields[fidx].namesize = prefixsize + fieldsize;
+		memcpy(data->fl.fields[fidx].name, fullfieldname,
+			data->fl.fields[fidx].namesize);
+		data->fl.fields[fidx].name[data->fl.fields[fidx].namesize]
+			= '\0';
 
 		if (accept(i, COLORST_ID)) {
-			i->fl.fields[fidx].type = COLORST_FIELD_ID;
-			printf("id\n");
+			data->fl.fields[fidx].type = COLORST_FIELD_ID;
 		} else if (accept(i, COLORST_INT)) {
-			i->fl.fields[fidx].type = COLORST_FIELD_INT;
-			printf("int\n");
+			data->fl.fields[fidx].type = COLORST_FIELD_INT;
 		} else if (accept(i, COLORST_STRING)) {
-			i->fl.fields[fidx].type = COLORST_FIELD_STRING;
-			printf("string\n");
+			data->fl.fields[fidx].type = COLORST_FIELD_STRING;
 		} else if (accept(i, COLORST_CURLY_BRACKET_OPEN)) {
-			printf("object\n");
+			data->fl.fields[fidx].type = COLORST_FIELD_OBJECT;
 			/* append prefix */
-			memcpy(i->fl.prefix + prefixsize,
+			memcpy(data->fl.prefix + prefixsize,
 				fieldname, fieldsize);
 			/* and dot */
-			i->fl.prefix[prefixsize + fieldsize] = '.';
+			data->fl.prefix[prefixsize + fieldsize] = '.';
 
 			json_like_value(i, 1, prefixsize + fieldsize + 1);
 		} else {
@@ -103,7 +105,6 @@ json_like_value(struct input *i, int object, size_t prefixsize)
 		if (object) {
 			if (accept(i, COLORST_CURLY_BRACKET_CLOSE)) {
 				/* end of object */
-				printf("end of object\n");
 				break;
 			}
 		}
@@ -123,7 +124,9 @@ json_like_value(struct input *i, int object, size_t prefixsize)
 static void
 insert(struct input *i)
 {
-	char collection[TOKEN_MAX_SIZE];
+	struct colorst_data *data;
+
+	data = i->data;
 
 	if (!expect(i, COLORST_INTO)) {
 		mkerror(i, "Expected INTO after INSERT");
@@ -131,7 +134,7 @@ insert(struct input *i)
 	}
 
 	/* collection name */
-	strncpy(collection, i->current_token.str, sizeof(collection));
+	strncpy(data->collection, i->current_token.str, TOKEN_MAX_SIZE);
 	if (!expect(i, COLORST_ID)) {
 		mkerror(i, "Expected COLLECTION after INSERT INTO");
 		return;
@@ -148,7 +151,9 @@ insert(struct input *i)
 		return;
 	}
 
-	colorst_prepare_insert(i);
+	if (!colorst_prepare_insert(i)) {
+		mkerror(i, "Can't create collection");
+	}
 }
 
 static void
@@ -168,7 +173,7 @@ create_collection(struct input *i)
 		return;
 	}
 
-	colorst_create_collection(i->data->tr, collection, msg);
+	colorst_create_collection(i->data->tr, collection, NULL, msg);
 	printf("%s\n", msg);
 }
 

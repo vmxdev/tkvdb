@@ -6,13 +6,15 @@
 #include "colorst_impl.h"
 
 int
-colorst_create_collection(tkvdb_tr *tr, const char *coll_name, char *msg)
+colorst_create_collection(tkvdb_tr *tr, const char *coll_name,
+	uint32_t *collidptr, char *msg)
 {
 	tkvdb_datum dtk, dtv;
 	char *key;
 	size_t keylen;
 	uint32_t cpfx = COLORST_PREFIX_COLLECTIONS;
 	TKVDB_RES rc;
+	uint32_t collection_id;
 
 	keylen = sizeof(cpfx) + strlen(coll_name);
 
@@ -29,63 +31,79 @@ colorst_create_collection(tkvdb_tr *tr, const char *coll_name, char *msg)
 	rc = tr->get(tr, &dtk, &dtv);
 
 	if (rc == TKVDB_OK) {
-		int *id;
+		uint32_t *colid;
 
-		id = dtv.data;
+		colid = dtv.data;
+		if (collidptr) {
+			*collidptr = *colid;
+		}
 		sprintf(msg, "Collection '%s' already exists, ID %d",
-			coll_name, *id);
+			coll_name, *colid);
 		return 1;
 	}
 
-	if ((rc == TKVDB_NOT_FOUND) || (rc == TKVDB_EMPTY)) {
-		/* add new collection */
-		uint32_t colid = 0, *dbcolid;
-		tkvdb_cursor *c;
-		tkvdb_datum dtks;
+	if (rc == TKVDB_EMPTY) {
+		/* add autoincrement collection id
+		   key (uint32_t): COLORST_PREFIX_COLLECTIONS
+		   value(uint32_t): id */
+		tkvdb_datum dtcol, dtcolval;
 
-		/* iterate through collection names */
-		c = tkvdb_cursor_create(tr);
-		if (!c) {
-			strcpy(msg, "Can't create cursor");
-			return 0;
-		}
-		dtks.data = &cpfx;
-		dtks.size = sizeof(cpfx);
-		rc = c->seek(c, &dtks, TKVDB_SEEK_GE);
-		while (rc == TKVDB_OK) {
-			if (c->keysize(c) <= sizeof(cpfx)) {
-				/* key is too short */
-				break;
-			}
-			if (memcmp(c->key(c), &cpfx, sizeof(cpfx)) != 0) {
-				/* another prefix */
-				break;
-			}
-			if (c->valsize(c) != sizeof(colid)) {
-				/* value is not collection id. error? */
-				break;
-			}
+		collection_id = 1; /* start from 1 */
 
-			dbcolid = (uint32_t *)c->val(c);
-			/* looking for max collection id */
-			if (*dbcolid > colid) {
-				colid = *dbcolid;
-			}
-			rc = c->next(c);
-		}
-		colid++;
+		dtcol.data = &cpfx;
+		dtcol.size = sizeof(cpfx);
 
-		/* now put collection and id */
-		dtv.data = &colid;
-		dtv.size = sizeof(colid);
-		rc = tr->put(tr, &dtk, &dtv);
-		if (rc == TKVDB_OK) {
-			sprintf(msg, "CREATE COLLECTION %s, ID %d",
-				coll_name, (int)colid);
-			return 1;
+		dtcolval.data = &collection_id;
+		dtcolval.size = sizeof(collection_id);
+
+		rc = tr->put(tr, &dtcol, &dtcolval);
+		if (rc != TKVDB_OK) {
+			goto db_error;
 		}
+	} else if (rc == TKVDB_NOT_FOUND) {
+		tkvdb_datum dtcol, dtcolval;
+
+		/* fetch collection id from database */
+		dtcol.data = &cpfx;
+		dtcol.size = sizeof(cpfx);
+
+		dtcolval.data = &collection_id;
+		dtcolval.size = sizeof(collection_id);
+
+		rc = tr->get(tr, &dtcol, &dtcolval);
+		if (rc != TKVDB_OK) {
+			goto db_error;
+		}
+
+		/* increment collection id */
+		collection_id++;
+
+		/* and put new value to database */
+		*((uint32_t *)dtcolval.data) = collection_id;
+	} else {
+		/* error */
+		goto db_error;
 	}
 
+	/* now put collection and id */
+	dtv.data = &collection_id;
+	dtv.size = sizeof(collection_id);
+
+	rc = tr->put(tr, &dtk, &dtv);
+	if (rc != TKVDB_OK) {
+		goto db_error;
+	}
+
+	if (collidptr) {
+		*collidptr = collection_id;
+	}
+	sprintf(msg, "CREATE COLLECTION %s, ID %d", coll_name,
+		(int)collection_id);
+
+	return 1;
+
+
+db_error:
 	sprintf(msg, "DB error, code %d", rc);
 
 	return 0;

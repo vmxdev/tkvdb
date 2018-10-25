@@ -25,6 +25,24 @@ struct colorst
 colorst *colorst_create(const char *query, tkvdb_tr *tr,
 	int *retcode, char *msg, size_t msgsize);
 
+/* result of some operations */
+typedef struct colorst_res colorst_res;
+
+struct colorst_res
+{
+	int errors;
+	char **error_messages;
+
+	int warnings;
+	char **warning_messages;
+
+	int info;
+	char **info_messages;
+};
+
+void colorst_res_init(colorst_res *cr);
+void colorst_res_free(colorst_res *cr);
+
 #ifdef __cplusplus
 }
 #endif

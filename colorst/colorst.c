@@ -55,6 +55,37 @@ colorst_free(colorst *c)
 	free(c);
 }
 
+void
+colorst_res_init(colorst_res *cr)
+{
+	cr->errors = cr->warnings = cr->info = 0;
+
+	cr->error_messages = NULL;
+	cr->warning_messages = NULL;
+	cr->info_messages = NULL;
+}
+
+void
+colorst_res_free(colorst_res *cr)
+{
+	int i;
+
+#define FREE(N, MSGS)                                 \
+do {                                                  \
+	for (i=0; i<N; i++) {                         \
+		free(MSGS[i]);                        \
+		MSGS[i] = NULL;                       \
+	}                                             \
+	free(MSGS);                                   \
+} while (0)
+
+	FREE(cr->errors, cr->error_messages);
+	FREE(cr->warnings, cr->warning_messages);
+	FREE(cr->info, cr->info_messages);
+
+#undef FREE
+}
+
 static int
 colorst_prepare(colorst *c, const char *query, char *message, size_t msgsize)
 {
@@ -69,10 +100,11 @@ colorst_prepare(colorst *c, const char *query, char *message, size_t msgsize)
 	i.errmsg = message;
 	i.msgsize = msgsize;
 
-	i.fl.fields = NULL;
-	i.fl.nfields = 0;
-
 	i.data = c->data;
+
+	i.data->fl.fields = NULL;
+	i.data->fl.nfields = 0;
+
 
 	parse_query(&i);
 

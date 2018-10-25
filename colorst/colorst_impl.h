@@ -57,7 +57,8 @@ enum COLORST_FIELD_TYPE
 {
 	COLORST_FIELD_ID,
 	COLORST_FIELD_INT,
-	COLORST_FIELD_STRING
+	COLORST_FIELD_STRING,
+	COLORST_FIELD_OBJECT
 };
 
 /* field (name + value) and fields list */
@@ -91,6 +92,9 @@ struct token
 struct colorst_data
 {
 	tkvdb_tr *tr;
+
+	char collection[TOKEN_MAX_SIZE];
+	struct fields_list fl;
 };
 
 /* query */
@@ -106,8 +110,6 @@ struct input
 
 	struct token current_token;
 
-	struct fields_list fl;
-
 	/* pass data to parser */
 	struct colorst_data *data;
 };
@@ -116,8 +118,9 @@ struct input
 void read_token(struct input *i);
 void parse_query(struct input *i);
 void mkerror(struct input *i, char *msg);
-int  colorst_create_collection(tkvdb_tr *tr, const char *coll_name, char *msg);
-int colorst_prepare_insert(struct input *i);
+int  colorst_create_collection(tkvdb_tr *tr, const char *coll_name,
+	uint32_t *collidptr, char *msg);
+int  colorst_prepare_insert(struct input *i);
 
 #endif
 
