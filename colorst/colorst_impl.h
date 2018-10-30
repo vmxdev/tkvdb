@@ -50,7 +50,9 @@ enum COLORST_TOKEN
 enum COLORST_PREFIX
 {
 	COLORST_PREFIX_COLLECTIONS,        /* set of collections */
-	COLORST_PREFIX_FIELDS              /* fields */
+	COLORST_PREFIX_FIELDS,             /* fields */
+	COLORST_PREFIX_COLLROWS,           /* number of rows in collection */
+	COLORST_PREFIX_DATA_START = 100    /* data */
 };
 
 enum COLORST_FIELD_TYPE
@@ -70,7 +72,7 @@ struct field
 	char name[TOKEN_MAX_SIZE];
 
 	size_t valsize;
-	char val[1];
+	char val[TOKEN_MAX_SIZE]; /* FIXME: hmm */
 };
 
 struct fields_list

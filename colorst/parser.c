@@ -78,10 +78,19 @@ json_like_value(struct input *i, int object, size_t prefixsize)
 
 		if (accept(i, COLORST_ID)) {
 			data->fl.fields[fidx].type = COLORST_FIELD_ID;
+			data->fl.fields[fidx].valsize
+				= strlen(i->current_token.str);
 		} else if (accept(i, COLORST_INT)) {
+			int64_t val;
+
 			data->fl.fields[fidx].type = COLORST_FIELD_INT;
+			data->fl.fields[fidx].valsize = sizeof(val);
+			val = atol(i->current_token.str);
+			memcpy(data->fl.fields[fidx].val, &val, sizeof(val));
 		} else if (accept(i, COLORST_STRING)) {
 			data->fl.fields[fidx].type = COLORST_FIELD_STRING;
+			data->fl.fields[fidx].valsize
+				= strlen(i->current_token.str);
 		} else if (accept(i, COLORST_CURLY_BRACKET_OPEN)) {
 			data->fl.fields[fidx].type = COLORST_FIELD_OBJECT;
 			/* append prefix */

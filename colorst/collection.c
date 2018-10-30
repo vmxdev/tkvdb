@@ -67,14 +67,12 @@ colorst_create_collection(tkvdb_tr *tr, const char *coll_name,
 		dtcol.data = &cpfx;
 		dtcol.size = sizeof(cpfx);
 
-		dtcolval.data = &collection_id;
-		dtcolval.size = sizeof(collection_id);
-
 		rc = tr->get(tr, &dtcol, &dtcolval);
 		if (rc != TKVDB_OK) {
 			goto db_error;
 		}
 
+		collection_id = *((uint32_t *)dtcolval.data);
 		/* increment collection id */
 		collection_id++;
 
