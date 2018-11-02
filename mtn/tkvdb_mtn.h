@@ -29,7 +29,7 @@ TKVDB_RES tkvdb_mtn_put(tkvdb_mtn *mtn,
 	const tkvdb_datum *key, const tkvdb_datum *val);
 
 TKVDB_RES tkvdb_mtn_get(tkvdb_mtn *mtn,
-	const tkvdb_datum *key, const tkvdb_datum *val);
+	const tkvdb_datum *key, tkvdb_datum *val);
 
 TKVDB_RES tkvdb_mtn_del(tkvdb_mtn *mtn, const tkvdb_datum *key, int del_pfx);
 
