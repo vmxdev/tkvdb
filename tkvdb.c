@@ -84,6 +84,8 @@ struct tkvdb_params
 	int tr_buf_dynalloc;    /* realloc transaction buffer when needed */
 
 	int alignval;           /* val alignment */
+
+	int autobegin;
 };
 
 /* packed structures */
@@ -259,6 +261,8 @@ tkvdb_params_init(tkvdb_params *params)
 #endif
 
 	params->alignval = 0;
+
+	params->autobegin = 0;
 }
 
 /* open database file */
@@ -366,6 +370,9 @@ tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val)
 			break;
 		case TKVDB_PARAM_ALIGNVAL:
 			params->alignval = (int)val;
+			break;
+		case TKVDB_PARAM_AUTOBEGIN:
+			params->autobegin = (int)val;
 			break;
 		default:
 			break;
@@ -577,8 +584,6 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 	trdata->db = db;
 	trdata->root = NULL;
 
-	trdata->started = 0;
-
 	/* setup params */
 	if (user_params) {
 		trdata->params = *user_params;
@@ -601,6 +606,12 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 		trdata->tr_buf_ptr = NULL;
 	}
 	trdata->tr_buf_allocated = 0;
+
+	if (!trdata->params.autobegin) {
+		trdata->started = 0;
+	} else {
+		trdata->started = 1;
+	}
 
 	/* setup functions */
 	tr->begin = &tkvdb_begin;

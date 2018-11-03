@@ -34,7 +34,9 @@ TKVDB_IMPL_TR_RESET(tkvdb_tr *trns)
 	tr->root = NULL;
 
 	tr->tr_buf_allocated = 0;
-	tr->started = 0;
+	if (!tr->params.autobegin) {
+		tr->started = 0;
+	}
 }
 
 static void

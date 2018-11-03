@@ -131,6 +131,7 @@ Transaction parameter can be:
   * `TKVDB_PARAM_TR_DYNALLOC` - if != `0` then `tkvdb` will allocate memory for nodes dynamically using `malloc()`. Else `tkvdb` will use simple builtin allocator (which can be faster). Default `1`
   * `TKVDB_PARAM_TR_LIMIT` - memory limit for transaction. In case of overlimit transaction functions will return `TKVDB_ENOMEM`. When used with `TKVDB_PARAM_TR_DYNALLOC` == `0` memory will be allocated in `tkvdb_tr_create()` and this buffer will be used for transaction. Default `SIZE_MAX` (no limit)
   * `TKVDB_PARAM_ALIGNVAL` - align values in memory. Must be power of two. `0` or `1` means value will not be aligned
+  * `TKVDB_PARAM_AUTOBEGIN` - start transaction automatically after creation, `commit()` and `rollback()`. `begin()` function ignored. Default `0` (you must call `begin()` before working with transaction)
 
 ## Multithreading
 

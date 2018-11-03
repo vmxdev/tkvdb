@@ -31,9 +31,20 @@ typedef enum TKVDB_SEEK
 /* database (or transaction) parameters */
 typedef enum TKVDB_PARAM
 {
-	TKVDB_PARAM_TR_DYNALLOC,   /* dynamically allocate space for nodes */
-	TKVDB_PARAM_TR_LIMIT,      /* limit of transaction size (0 for none) */ 
-	TKVDB_PARAM_ALIGNVAL       /* align value in node (0 or 1 for none) */
+	/* dynamically allocate space for nodes (using system malloc() for
+	   each node) */
+	TKVDB_PARAM_TR_DYNALLOC,
+
+	/* transaction size limit (0 for none), default SIZE_MAX,
+	   e.g. no limit */
+	TKVDB_PARAM_TR_LIMIT,
+
+	/* align value in memory (0 or 1 for none), must be power of two */
+	TKVDB_PARAM_ALIGNVAL,
+
+	/* automatically start transaction after commit() and rollback(),
+	   transaction created in started state, begin() is ignored */
+	TKVDB_PARAM_AUTOBEGIN
 } TKVDB_PARAM;
 
 typedef struct tkvdb_datum
