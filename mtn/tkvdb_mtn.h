@@ -18,7 +18,8 @@ typedef enum TKVDB_MTN_TYPE
 
 typedef struct tkvdb_mtn tkvdb_mtn;
 
-tkvdb_mtn *tkvdb_mtn_create(tkvdb_tr *tr, TKVDB_MTN_TYPE type);
+tkvdb_mtn *tkvdb_mtn_create_locked(tkvdb_tr *tr, TKVDB_MTN_TYPE type);
+tkvdb_mtn *tkvdb_mtn_create_spmc(tkvdb_tr *tr1, tkvdb_tr *tr2);
 void tkvdb_mtn_free(tkvdb_mtn *mtn);
 
 TKVDB_RES tkvdb_mtn_begin(tkvdb_mtn *mtn);
