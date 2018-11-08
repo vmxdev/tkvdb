@@ -13,13 +13,17 @@ typedef enum TKVDB_MTN_TYPE
 	TKVDB_MTN_MUTEX_TRY,
 	TKVDB_MTN_SPINLOCK,
 	TKVDB_MTN_SPINLOCK_TRY,
-	TKVDB_MTN_WAITFREE_SPMC
+	TKVDB_MTN_WAITFREE_SPMC,
+	TKVDB_MTN_WAITFREE_MPMC
 } TKVDB_MTN_TYPE;
 
 typedef struct tkvdb_mtn tkvdb_mtn;
 
 tkvdb_mtn *tkvdb_mtn_create_locked(tkvdb_tr *tr, TKVDB_MTN_TYPE type);
 tkvdb_mtn *tkvdb_mtn_create_spmc(tkvdb_tr *tr1, tkvdb_tr *tr2);
+tkvdb_mtn *tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
+	int ns_sleep);
+
 void tkvdb_mtn_free(tkvdb_mtn *mtn);
 
 TKVDB_RES tkvdb_mtn_begin(tkvdb_mtn *mtn);
