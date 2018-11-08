@@ -138,7 +138,7 @@ Transaction parameter can be:
 `tkvdb` does not use any OS-dependent synchronization mechanisms.
 You must explicitly lock transaction update operations.
 
-However, on some CPU's (at least on x32/x64) we can guarantee that `transaction->put()` will never put the in-memory transaction in inconsistent state.
+However, on some CPU's (at least on x32/x64) we can guarantee that `transaction->put()` will never put the in-memory transaction in inconsistent state in RAM-only mode.
 Updates of tree are lock-free and atomic.
 You can use one writer and multiple readers without locks.
 But be careful with `transaction->rollback()` and `transaction->commit()` - there is no such guarantees for theese functions, reading from transaction while resetting it can lead to unpredicatable consequences.
