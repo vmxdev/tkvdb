@@ -132,6 +132,8 @@ Transaction parameter can be:
   * `TKVDB_PARAM_TR_LIMIT` - memory limit for transaction. In case of overlimit transaction functions will return `TKVDB_ENOMEM`. When used with `TKVDB_PARAM_TR_DYNALLOC` == `0` memory will be allocated in `tkvdb_tr_create()` and this buffer will be used for transaction. Default `SIZE_MAX` (no limit)
   * `TKVDB_PARAM_ALIGNVAL` - align values in memory. Must be power of two. `0` or `1` means value will not be aligned
   * `TKVDB_PARAM_AUTOBEGIN` - start transaction automatically after creation, `commit()` and `rollback()`. `begin()` function ignored. Default `0` (you must call `begin()` before working with transaction)
+  * `TKVDB_PARAM_CURSOR_STACK_DYNALLOC` - allocate stack for cursors dynamically when needed (using `realloc()`). Default 1.
+  * `TKVDB_PARAM_CURSOR_STACK_LIMIT` - memory limit cursor stack (in bytes). No limits by default. Stack parameters applied also for `commit()` and `free()` operations for iteration through nodes.
 
 ## Multithreading
 
@@ -146,7 +148,6 @@ But be careful with `transaction->rollback()` and `transaction->commit()` - ther
 ## Bugs and caveats (sort of TODO)
 
   * There is still no `vacuum` routine for database file. We have initial and bogus implementation, but it's not tested, so the database now is append-only.
-  * Cursor operations (seeks and traversal) has fixed limit for tree depth. Limit is defined in `tkvdb.c` (`TKVDB_STACK_MAX_DEPTH 128`), you can increase it and recompile if needed.
   * Cursors operations are slow (compared with `get()` or even `put()` with tkvdb builtin allocator). There is a call to `realloc()` on each node hit. Probably it will be fixed.
   * There is no easy way to get N-th record of database. However, it's possible to implement such seeks using some nodes metadata.
   * There is no publicly available benchmarks and nice performance charts. You can run `perf_test` from `extra` directory, it will show ops(inserts/updates and lookups) per second for 4 and 16 byte keys with different number of keys in transaction. Test is single-threaded and shows RAM-only operations. Depending on hardware you may get up to tens of millions ops per second (or even more than 100 millions lookups per second for short keys). Probably we will make more accurate, complete and readable performance tests.

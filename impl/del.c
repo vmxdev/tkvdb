@@ -27,7 +27,7 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 
 	if (!prev) {
 		/* remove root node */
-		TKVDB_IMPL_NODE_FREE(node);
+		TKVDB_IMPL_NODE_FREE(tr, node);
 		node = TKVDB_IMPL_NODE_NEW(trns, 0, 0, NULL, 0, NULL);
 		if (!node) {
 			return TKVDB_ENOMEM;
@@ -42,7 +42,7 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 #ifndef TKVDB_PARAMS_NODBFILE
 		prev->fnext[prev_off] = 0;
 #endif
-		TKVDB_IMPL_NODE_FREE(node);
+		TKVDB_IMPL_NODE_FREE(tr, node);
 		return TKVDB_OK;
 	} else if (node->c.type & TKVDB_NODE_VAL) {
 		/* check if we have at least 1 subnode */
@@ -65,7 +65,7 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 #ifndef TKVDB_PARAMS_NODBFILE
 			prev->fnext[prev_off] = 0;
 #endif
-			TKVDB_IMPL_NODE_FREE(node);
+			TKVDB_IMPL_NODE_FREE(tr, node);
 			return TKVDB_OK;
 		}
 		/* we have subnodes, so just clear value bit */

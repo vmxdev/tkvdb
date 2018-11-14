@@ -349,10 +349,9 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 
 /* free node and subnodes */
 static void
-TKVDB_IMPL_NODE_FREE(TKVDB_MEMNODE_TYPE *node)
+TKVDB_IMPL_NODE_FREE(tkvdb_tr_data *tr, TKVDB_MEMNODE_TYPE *node)
 {
 	size_t stack_size = 0;
-	struct tkvdb_visit_helper stack[TKVDB_STACK_MAX_DEPTH];
 
 	TKVDB_MEMNODE_TYPE *next;
 	int off = 0;
@@ -377,8 +376,21 @@ TKVDB_IMPL_NODE_FREE(TKVDB_MEMNODE_TYPE *node)
 
 			if (next) {
 				/* push */
+				if ((stack_size + 1) > tr->stack_allocated) {
+					tr->stack = realloc(tr->stack,
+						(stack_size + 1)
+						* sizeof(struct tkvdb_visit_helper));
+					if (!tr->stack) {
+						return;
+					}
+					tr->stack_allocated = stack_size + 1;
+				}
+				tr->stack[stack_size].node = node;
+				tr->stack[stack_size].off = off;
+/*
 				stack[stack_size].node = node;
 				stack[stack_size].off = off;
+*/
 				stack_size++;
 
 				node = next;
@@ -395,8 +407,8 @@ TKVDB_IMPL_NODE_FREE(TKVDB_MEMNODE_TYPE *node)
 		free(node);
 		/* get node from stack's top */
 		stack_size--;
-		node = stack[stack_size].node;
-		off = stack[stack_size].off;
+		node = tr->stack[stack_size].node;
+		off = tr->stack[stack_size].off;
 		off++;
 	}
 	free(node);

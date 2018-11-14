@@ -35,8 +35,7 @@ typedef enum TKVDB_PARAM
 	   each node) */
 	TKVDB_PARAM_TR_DYNALLOC,
 
-	/* transaction size limit (0 for none), default SIZE_MAX,
-	   e.g. no limit */
+	/* transaction size limit, default SIZE_MAX, e.g. no limit */
 	TKVDB_PARAM_TR_LIMIT,
 
 	/* align value in memory (0 or 1 for none), must be power of two */
@@ -44,7 +43,13 @@ typedef enum TKVDB_PARAM
 
 	/* automatically start transaction after commit() and rollback(),
 	   transaction created in started state, begin() is ignored */
-	TKVDB_PARAM_AUTOBEGIN
+	TKVDB_PARAM_AUTOBEGIN,
+
+	/* dynamically allocate space for cursors stacks, default 1 */
+	TKVDB_PARAM_CURSOR_STACK_DYNALLOC,
+
+	/* cursors stacks size limit, default SIZE_MAX */
+	TKVDB_PARAM_CURSOR_STACK_LIMIT
 } TKVDB_PARAM;
 
 typedef struct tkvdb_datum

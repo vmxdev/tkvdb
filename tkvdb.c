@@ -47,9 +47,6 @@
 /* read block size */
 #define TKVDB_READ_SIZE 4096
 
-/* FIXME: allocate stack dynamically */
-#define TKVDB_STACK_MAX_DEPTH 128
-
 /* helper macro for executing functions which returns TKVDB_RES */
 #define TKVDB_EXEC(FUNC)                   \
 do {                                       \
@@ -86,6 +83,9 @@ struct tkvdb_params
 	int alignval;           /* val alignment */
 
 	int autobegin;
+
+	size_t stack_limit;    /* cursors stack size limit */
+	int stack_dynalloc;    /* dynamically allocate cursors stack */
 };
 
 /* packed structures */
@@ -156,6 +156,13 @@ struct tkvdb
 	size_t write_buf_allocated;
 };
 
+/* helper struct for iterations through transaction */
+struct tkvdb_visit_helper
+{
+	void *node;                     /* pointer to memnode */
+	int off;                        /* index of subnode in node */
+};
+
 /* transaction in memory */
 typedef struct tkvdb_tr_data
 {
@@ -169,19 +176,22 @@ typedef struct tkvdb_tr_data
 	uint8_t *tr_buf;                /* transaction buffer */
 	size_t tr_buf_allocated;
 	uint8_t *tr_buf_ptr;
+
+	/* stack is used in commit() and free() */
+	struct tkvdb_visit_helper *stack;
+	/* allocated stack items (number of tkvdb_visit_helper) */
+	size_t stack_allocated;
 } tkvdb_tr_data;
 
-struct tkvdb_visit_helper
-{
-	void *node;                     /* pointer to memnode */
-	int off;                        /* index of subnode in node */
-};
 
 /* database cursor */
 typedef struct tkvdb_cursor_data
 {
-	size_t stack_size;
-	struct tkvdb_visit_helper stack[TKVDB_STACK_MAX_DEPTH];
+	size_t stack_size, stack_allocated;
+	struct tkvdb_visit_helper *stack;
+
+	size_t stack_limit;
+	int stack_dynalloc;
 
 	size_t prefix_size;
 	unsigned char *prefix;
@@ -252,6 +262,9 @@ tkvdb_params_init(tkvdb_params *params)
 
 	params->tr_buf_dynalloc = 1;
 	params->tr_buf_limit = SIZE_MAX;
+
+	params->stack_dynalloc = 1;
+	params->stack_limit = SIZE_MAX / sizeof(struct tkvdb_visit_helper);
 
 	params->mode = S_IRUSR | S_IWUSR;
 #ifndef _WIN32
@@ -374,6 +387,14 @@ tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val)
 		case TKVDB_PARAM_AUTOBEGIN:
 			params->autobegin = (int)val;
 			break;
+		case TKVDB_PARAM_CURSOR_STACK_DYNALLOC:
+			params->stack_dynalloc = (int)val;
+			break;
+		case TKVDB_PARAM_CURSOR_STACK_LIMIT:
+			/* bytes to number of items */
+			params->stack_limit = (size_t)val
+				/ sizeof(struct tkvdb_visit_helper);
+			break;
 		default:
 			break;
 	}
@@ -394,7 +415,10 @@ tkvdb_cursor_free(tkvdb_cursor *c)
 	cdata->val_size = 0;
 	cdata->val = NULL;
 
+	free(cdata->stack);
+	cdata->stack = NULL;
 	cdata->stack_size = 0;
+	cdata->stack_allocated = 0;
 
 	free(cdata);
 	c->data = NULL;
@@ -613,6 +637,19 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 		trdata->started = 1;
 	}
 
+	/* setup stack for free() and commit() */
+	if (trdata->params.stack_dynalloc) {
+		trdata->stack = NULL;
+		trdata->stack_allocated = 0;
+	} else {
+		trdata->stack = malloc(trdata->params.stack_limit
+			* sizeof(struct tkvdb_visit_helper));
+		if (!trdata->stack) {
+			goto fail_stack;
+		}
+		trdata->stack_allocated = trdata->params.stack_limit;
+	}
+
 	/* setup functions */
 	tr->begin = &tkvdb_begin;
 	tr->mem = &tkvdb_tr_mem;
@@ -663,6 +700,8 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 	return tr;
 
 	/* errors */
+fail_stack:
+	free(trdata->tr_buf);
 fail_buf:
 	free(trdata);
 fail_trdata:
@@ -680,18 +719,34 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 
 	c = malloc(sizeof(tkvdb_cursor));
 	if (!c) {
-		return NULL;
+		goto fail_calloc;
 	}
 
 	cdata = malloc(sizeof(tkvdb_cursor_data));
 	if (!cdata) {
-		free(c);
-		return NULL;
+		goto fail_datalloc;
 	}
 
 	c->data = cdata;
 
 	cdata->stack_size = 0;
+
+	cdata->stack_limit = trdata->params.stack_limit;
+	cdata->stack_dynalloc = trdata->params.stack_dynalloc;
+
+	if (!cdata->stack_dynalloc) {
+		/* allocate stack */
+		cdata->stack = malloc(cdata->stack_limit
+			* sizeof(struct tkvdb_visit_helper));
+
+		if (!cdata->stack) {
+			goto fail_stack;
+		}
+		cdata->stack_allocated = cdata->stack_limit;
+	} else {
+		cdata->stack = NULL;
+		cdata->stack_allocated = 0;
+	}
 
 	cdata->prefix_size = 0;
 	cdata->prefix = NULL;
@@ -745,7 +800,16 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 		}
 	}
 
-
 	return c;
+
+fail_stack:
+	free(cdata);
+
+fail_datalloc:
+	free(c);
+
+fail_calloc:
+
+	return NULL;
 }
 

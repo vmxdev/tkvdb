@@ -56,6 +56,23 @@ TKVDB_IMPL_CURSOR_PUSH(tkvdb_cursor *cr, TKVDB_MEMNODE_TYPE *node, int off)
 {
 	tkvdb_cursor_data *c = cr->data;
 
+	if (c->stack_size <= c->stack_allocated) {
+		/* stack is too small */
+		struct tkvdb_visit_helper *tmpstack;
+
+		if (!c->stack_dynalloc) {
+			/* dynamic reallocation is not allowed */
+			return TKVDB_ENOMEM;
+		}
+
+		tmpstack = realloc(c->stack, (c->stack_size + 1)
+			* sizeof(struct tkvdb_visit_helper));
+		if (!tmpstack) {
+			return TKVDB_ENOMEM;
+		}
+		c->stack = tmpstack;
+		c->stack_allocated = c->stack_size + 1;
+	}
 	c->stack[c->stack_size].node = node;
 	c->stack[c->stack_size].off = off;
 	c->stack_size++;
