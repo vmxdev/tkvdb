@@ -56,7 +56,7 @@ TKVDB_IMPL_CURSOR_PUSH(tkvdb_cursor *cr, TKVDB_MEMNODE_TYPE *node, int off)
 {
 	tkvdb_cursor_data *c = cr->data;
 
-	if (c->stack_size <= c->stack_allocated) {
+	if ((c->stack_size + 1) > c->stack_allocated) {
 		/* stack is too small */
 		struct tkvdb_visit_helper *tmpstack;
 
