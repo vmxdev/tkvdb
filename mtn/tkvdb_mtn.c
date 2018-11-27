@@ -9,8 +9,15 @@ struct mpmcdata
 	tkvdb_tr *banks[3];
 	int ns_sleep;
 
-	size_t nmtns;
-	tkvdb_mtn *mtns;
+	size_t nproducers;
+	tkvdb_mtn **producers;
+
+	size_t nsubaggrs;
+	tkvdb_mtn **subaggrs;
+
+	size_t npendingadd, npendingdel;
+	tkvdb_mtn **pendingadd, **pendingdel;
+	pthread_mutex_t pending_mutex;
 
 	pthread_t tid;
 	int stop;
@@ -31,6 +38,13 @@ struct tkvdb_mtn
 	tkvdb_tr *tr;
 };
 
+struct tkvdb_mtn_cursor
+{
+	tkvdb_mtn *mtn;
+	tkvdb_cursor *c;
+};
+
+/* transaction with pthread locks */
 tkvdb_mtn *
 tkvdb_mtn_create_locked(tkvdb_tr *tr, TKVDB_MTN_TYPE type)
 {
@@ -73,7 +87,7 @@ fail_alloc:
 	return NULL;
 }
 
-/* single producer, multiple consumers */
+/* "wait-free" single producer, multiple consumers */
 tkvdb_mtn *
 tkvdb_mtn_create_spmc(tkvdb_tr *tr1, tkvdb_tr *tr2)
 {
@@ -98,9 +112,46 @@ fail_alloc:
 }
 
 
-/* multiple producers, multiple consumers */
+/* "wait-free" multiple producers, multiple consumers */
+static void
+tkvdb_mtn_mpmc_pendingadd(struct mpmcdata *mpmc)
+{
+	size_t i, j;
 
-/* merge thread */
+	pthread_mutex_lock(&mpmc->pending_mutex);
+
+	for (i=0; i<mpmc->npendingadd; i++) {
+		/* skip existing producers */
+		int found = 0;
+		tkvdb_mtn **tmpprod;
+
+		for (j=0; j<mpmc->nproducers; j++) {
+			if (mpmc->pendingadd[i] == mpmc->producers[j]) {
+				found = 1;
+			}
+		}
+
+		if (found) {
+			continue;
+		}
+
+		tmpprod = realloc(mpmc->producers,
+			sizeof(tkvdb_mtn *)
+			* (mpmc->nproducers + 1));
+
+		if (!tmpprod) {
+			/* do nothing */
+			continue;
+		}
+		mpmc->producers = tmpprod;
+		mpmc->producers[mpmc->nproducers] = mpmc->pendingadd[i];
+		mpmc->nproducers++;
+	}
+
+	pthread_mutex_unlock(&mpmc->pending_mutex);
+}
+
+/* mpmc merge thread */
 static void *
 tkvdb_mtn_mpmc_thread(void *arg)
 {
@@ -113,13 +164,26 @@ tkvdb_mtn_mpmc_thread(void *arg)
 	delay.tv_nsec = mpmc->ns_sleep % billion;
 
 	while (!mpmc->stop) {
+		size_t i;
+
+		for (i=0; i<mpmc->nproducers; i++) {
+			/* FIXME: tbw */
+		}
+
 		if (mpmc->ns_sleep) {
 			clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, NULL);
+		}
+
+		/* check for new producers */
+		if (mpmc->npendingadd) {
+			tkvdb_mtn_mpmc_pendingadd(mpmc);
 		}
 	}
 	return NULL;
 }
 
+/* create multiple producers/multiple consumers transaction
+   and start merge thread */
 tkvdb_mtn *
 tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
 	int ns_sleep)
@@ -128,6 +192,10 @@ tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
 
 	mtn = malloc(sizeof(tkvdb_mtn));
 	if (!mtn) {
+		goto fail_alloc;
+	}
+
+	if (pthread_mutex_init(&mtn->data.mpmc.pending_mutex, NULL) != 0) {
 		goto fail_alloc;
 	}
 
@@ -141,11 +209,15 @@ tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
 
 	mtn->data.mpmc.ns_sleep = ns_sleep;
 
-	mtn->data.mpmc.nmtns = 0;
-	mtn->data.mpmc.mtns  = NULL;
+	mtn->data.mpmc.nproducers = 0;
+	mtn->data.mpmc.producers = NULL;
+
+	mtn->data.mpmc.nsubaggrs = 0;
+	mtn->data.mpmc.subaggrs = NULL;
 
 	mtn->data.mpmc.stop  = 0;
 
+	/* start merge thread */
 	if (pthread_create(&mtn->data.mpmc.tid, NULL,
 		&tkvdb_mtn_mpmc_thread, mtn) != 0) {
 
@@ -159,6 +231,38 @@ fail_thread:
 
 fail_alloc:
 	return NULL;
+}
+
+int
+tkvdb_mtn_mpmc_add_producer(tkvdb_mtn *mpmc, tkvdb_mtn *subaggr, tkvdb_mtn *p)
+{
+	tkvdb_mtn **tmppadd;
+
+	if (mpmc->type != TKVDB_MTN_WAITFREE_MPMC) {
+		return 0;
+	}
+
+	if (subaggr) {
+	}
+
+	pthread_mutex_lock(&mpmc->data.mpmc.pending_mutex);
+
+	/* append producer to pending producers */
+	tmppadd = realloc(mpmc->data.mpmc.pendingadd,
+		sizeof(struct tkvdb_mtn *)
+		* (mpmc->data.mpmc.npendingadd) + 1);
+
+	if (!tmppadd) {
+		return 0;
+	}
+
+	mpmc->data.mpmc.pendingadd = tmppadd;
+	mpmc->data.mpmc.pendingadd[mpmc->data.mpmc.npendingadd] = p;
+	mpmc->data.mpmc.npendingadd++;
+
+	pthread_mutex_unlock(&mpmc->data.mpmc.pending_mutex);
+
+	return 1;
 }
 
 void
@@ -343,4 +447,93 @@ tkvdb_mtn_del(tkvdb_mtn *mtn, const tkvdb_datum *key, int del_pfx)
 	return rc;
 }
 
+/* cursors */
+tkvdb_mtn_cursor *
+tkvdb_mtn_cursor_create(tkvdb_mtn *mtn)
+{
+	tkvdb_mtn_cursor *c;
+
+	c = malloc(sizeof(tkvdb_mtn_cursor));
+	if (!c) {
+		goto fail_alloc;
+	}
+
+	c->c = tkvdb_cursor_create(mtn->tr);
+	if (!c->c) {
+		goto fail_cursor_create;
+	}
+
+	c->mtn = mtn;
+
+	return c;
+
+fail_cursor_create:
+	free(c);
+
+fail_alloc:
+	return NULL;
+}
+
+void *
+tkvdb_mtn_cursor_key(tkvdb_mtn_cursor *c)
+{
+	return c->c->key(c->c);
+}
+
+size_t
+tkvdb_mtn_cursor_keysize(tkvdb_mtn_cursor *c)
+{
+	return c->c->keysize(c->c);
+}
+
+void *
+tkvdb_mtn_cursor_val(tkvdb_mtn_cursor *c)
+{
+	return c->c->val(c->c);
+}
+
+size_t
+tkvdb_mtn_cursor_valsize(tkvdb_mtn_cursor *c)
+{
+	return c->c->valsize(c->c);
+}
+
+TKVDB_RES
+tkvdb_mtn_cursor_seek(tkvdb_mtn_cursor *c, const tkvdb_datum *key,
+	TKVDB_SEEK seek)
+{
+	return c->c->seek(c->c, key, seek);
+}
+
+TKVDB_RES
+tkvdb_mtn_cursor_first(tkvdb_mtn_cursor *c)
+{
+	return c->c->first(c->c);
+}
+
+TKVDB_RES
+tkvdb_mtn_cursor_last(tkvdb_mtn_cursor *c)
+{
+	return c->c->last(c->c);
+}
+
+
+TKVDB_RES
+tkvdb_mtn_cursor_next(tkvdb_mtn_cursor *c)
+{
+	return c->c->next(c->c);
+}
+
+TKVDB_RES
+tkvdb_mtn_cursor_prev(tkvdb_mtn_cursor *c)
+{
+	return c->c->prev(c->c);
+}
+
+void
+tkvdb_mtn_cursor_free(tkvdb_mtn_cursor *c)
+{
+	c->c->free(c->c);
+	free(c);
+}
 
