@@ -132,6 +132,7 @@ tkvdb_mtn_mpmc_pendingadd(struct mpmcdata *mpmc)
 		}
 
 		if (found) {
+			/* nothing to add */
 			continue;
 		}
 
@@ -165,9 +166,44 @@ tkvdb_mtn_mpmc_thread(void *arg)
 
 	while (!mpmc->stop) {
 		size_t i;
+		tkvdb_tr *tr;
+
+		tr = mpmc->banks[0]; /* FIXME: incorrect */
+
+		tr->begin(tr);
 
 		for (i=0; i<mpmc->nproducers; i++) {
-			/* FIXME: tbw */
+			tkvdb_mtn_cursor *c;
+			TKVDB_RES rc;
+
+			/* create cursor */
+			c = tkvdb_mtn_cursor_create(mpmc->producers[i]);
+			if (!c) {
+				/* error */
+				break;
+			}
+
+			rc = tkvdb_mtn_cursor_first(c);
+			while (rc == TKVDB_OK) {
+				tkvdb_datum dtk, dtv;
+
+				dtk.data = tkvdb_mtn_cursor_key(c);
+				dtk.size = tkvdb_mtn_cursor_keysize(c);
+
+				rc = tr->get(tr, &dtk, &dtv);
+				if (rc == TKVDB_OK) {
+					/* TODO: apply aggregation function */
+				} else {
+					/* new k-v pair */
+					dtv.data = tkvdb_mtn_cursor_val(c);
+					dtv.size = tkvdb_mtn_cursor_valsize(c);
+				}
+
+				tr->put(tr, &dtk, &dtv);
+				tkvdb_mtn_cursor_next(c);
+			}
+
+			tkvdb_mtn_cursor_free(c);
 		}
 
 		if (mpmc->ns_sleep) {
@@ -290,6 +326,55 @@ tkvdb_mtn_free(tkvdb_mtn *mtn)
 
 	free(mtn);
 }
+
+int
+tkvdb_mtn_lock(tkvdb_mtn *mtn)
+{
+	int rc;
+
+	switch (mtn->type) {
+		case TKVDB_MTN_MUTEX:
+		case TKVDB_MTN_MUTEX_TRY:
+			rc = pthread_mutex_lock(&mtn->data.mutex);
+			break;
+
+		case TKVDB_MTN_SPINLOCK:
+		case TKVDB_MTN_SPINLOCK_TRY:
+			rc = pthread_spin_lock(&mtn->data.spin);
+			break;
+
+		default:
+			rc = 0;
+			break;
+	}
+
+	return rc;
+}
+
+int
+tkvdb_mtn_unlock(tkvdb_mtn *mtn)
+{
+	int rc;
+
+	switch (mtn->type) {
+		case TKVDB_MTN_MUTEX:
+		case TKVDB_MTN_MUTEX_TRY:
+			rc = pthread_mutex_unlock(&mtn->data.mutex);
+			break;
+
+		case TKVDB_MTN_SPINLOCK:
+		case TKVDB_MTN_SPINLOCK_TRY:
+			rc = pthread_spin_unlock(&mtn->data.spin);
+			break;
+
+		default:
+			rc = 0;
+			break;
+	}
+
+	return rc;
+}
+
 
 #define LOCKED_CASE(FUNC, RC, LOCK, SPIN, LOCKRES)                \
 case TKVDB_MTN_MUTEX:                                             \

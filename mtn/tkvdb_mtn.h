@@ -39,6 +39,10 @@ TKVDB_RES tkvdb_mtn_get(tkvdb_mtn *mtn,
 
 TKVDB_RES tkvdb_mtn_del(tkvdb_mtn *mtn, const tkvdb_datum *key, int del_pfx);
 
+/* lock and unlock transaction */
+int tkvdb_mtn_lock(tkvdb_mtn *mtn);
+int tkvdb_mtn_unlock(tkvdb_mtn *mtn);
+
 /* cursors */
 tkvdb_mtn_cursor *tkvdb_mtn_cursor_create(tkvdb_mtn *mtn);
 void *tkvdb_mtn_cursor_key(tkvdb_mtn_cursor *c);
