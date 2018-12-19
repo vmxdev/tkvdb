@@ -7,6 +7,7 @@
 #include <wctype.h>
 #include <unistd.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "tkvdb.h"
 
@@ -24,9 +25,9 @@ debug_commit_msg()
 {
 	if (verbose) {
 		fprintf(stderr, "Flushing transaction"
-			", lines of text %lu"
-			", words %lu"
-			", words in database %lu\n",
+			", lines of text %"PRIu64
+			", words %"PRIu64
+			", words in database %"PRIu64"\n",
 			nlines, nwords_total, nwords_db);
 	}
 }
@@ -114,7 +115,7 @@ print_usage(char *progname)
 	fprintf(stderr, " %s -h\n", progname);
 	fprintf(stderr, "    db_file - name of database file (default '%s')\n",
 		db_file);
-	fprintf(stderr, "    size - size of transaction buffer (default %lu,"
+	fprintf(stderr, "    size - size of transaction buffer (default %zu,"
 		" min %d)\n", trsize, MIN_TR_SIZE);
 	fprintf(stderr, "    -l - convert letters to lowercase\n");
 	fprintf(stderr, "    verbosity - level of debug messages"
@@ -281,7 +282,7 @@ main(int argc, char *argv[])
 		tkvdb_datum dtk;
 
 		while (rc == TKVDB_OK) {
-			printf("%10lu  %ls\n", *((uint64_t *)c->val(c)),
+			printf("%10"PRIu64"  %ls\n", *((uint64_t *)c->val(c)),
 				(wchar_t *)c->key(c));
 
 			/* store key */
