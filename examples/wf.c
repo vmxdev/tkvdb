@@ -228,7 +228,7 @@ main(int argc, char *argv[])
 			}
 			wordlen++;
 
-			if (wordlen >= (sizeof(word) - 1)) {
+			if (wordlen >= (sizeof(word) / sizeof(wchar_t) - 1)) {
 				/* word is too big, add it */
 				addword = 1;
 			}
@@ -251,7 +251,12 @@ main(int argc, char *argv[])
 		}
 
 		if (sym == (wchar_t)WEOF) {
-			break;
+			if (feof(stdin)) {
+				break;
+			} else {
+				/* invalid character, try to recover */
+				fgetc(stdin);
+			}
 		}
 	}
 
