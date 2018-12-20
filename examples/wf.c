@@ -132,7 +132,7 @@ main(int argc, char *argv[])
 	tkvdb_params *params;
 	tkvdb_cursor *c;
 
-	wchar_t word[1024];
+	wchar_t word[256];
 	size_t wordlen = 0;
 	int lower = 0, opt;
 
@@ -179,6 +179,8 @@ main(int argc, char *argv[])
 	tkvdb_param_set(params, TKVDB_PARAM_TR_DYNALLOC, 0);
 	/* set buffer size */
 	tkvdb_param_set(params, TKVDB_PARAM_TR_LIMIT, trsize);
+	/* align values */
+	tkvdb_param_set(params, TKVDB_PARAM_ALIGNVAL, sizeof(uint64_t));
 
 	/* open database */
 	db = tkvdb_open(db_file, params);
