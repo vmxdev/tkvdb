@@ -4,9 +4,23 @@
 
 #include "tkvdb_mtn.h"
 
+/* We're using 3 mpmc banks:
+ * 1. for stalled readers
+ * 2. active
+ * 3. currently updated
+ */
+#define MPMC_BANKS 3
+#define MPMC_BANK_STALLED  0
+#define MPMC_BANK_ACTIVE   1
+#define MPMC_BANK_UPDATED  2
+
 struct mpmcdata
 {
-	tkvdb_tr *banks[3];
+	tkvdb_tr *banks[MPMC_BANKS];
+	unsigned int bank_ptr;
+
+	mpmc_aggr aggr_func;
+
 	int ns_sleep;
 
 	size_t nproducers;
@@ -168,8 +182,10 @@ tkvdb_mtn_mpmc_thread(void *arg)
 		size_t i;
 		tkvdb_tr *tr;
 
-		tr = mpmc->banks[0]; /* FIXME: incorrect */
+		tr = mpmc->banks[(mpmc->bank_ptr + MPMC_BANK_UPDATED)
+			% MPMC_BANKS];
 
+		tr->rollback(tr);
 		tr->begin(tr);
 
 		for (i=0; i<mpmc->nproducers; i++) {
@@ -192,7 +208,9 @@ tkvdb_mtn_mpmc_thread(void *arg)
 
 				rc = tr->get(tr, &dtk, &dtv);
 				if (rc == TKVDB_OK) {
-					/* TODO: apply aggregation function */
+					/* apply aggregation function */
+					(*mpmc->aggr_func)(dtv.data,
+						tkvdb_mtn_cursor_val(c));
 				} else {
 					/* new k-v pair */
 					dtv.data = tkvdb_mtn_cursor_val(c);
@@ -214,6 +232,9 @@ tkvdb_mtn_mpmc_thread(void *arg)
 		if (mpmc->npendingadd) {
 			tkvdb_mtn_mpmc_pendingadd(mpmc);
 		}
+
+		/* switch banks */
+		mpmc->bank_ptr++;
 	}
 	return NULL;
 }
@@ -222,7 +243,7 @@ tkvdb_mtn_mpmc_thread(void *arg)
    and start merge thread */
 tkvdb_mtn *
 tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
-	int ns_sleep)
+	mpmc_aggr aggr_func, int ns_sleep)
 {
 	tkvdb_mtn *mtn;
 
@@ -243,6 +264,8 @@ tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
 	mtn->data.mpmc.banks[1] = tr2;
 	mtn->data.mpmc.banks[2] = tr3;
 
+	mtn->data.mpmc.bank_ptr = 0;
+
 	mtn->data.mpmc.ns_sleep = ns_sleep;
 
 	mtn->data.mpmc.nproducers = 0;
@@ -252,6 +275,8 @@ tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
 	mtn->data.mpmc.subaggrs = NULL;
 
 	mtn->data.mpmc.stop  = 0;
+
+	mtn->data.mpmc.aggr_func  = aggr_func;
 
 	/* start merge thread */
 	if (pthread_create(&mtn->data.mpmc.tid, NULL,
@@ -418,6 +443,10 @@ tkvdb_mtn_begin(tkvdb_mtn *mtn)
 		case TKVDB_MTN_WAITFREE_SPMC:
 			rc = mtn->tr->begin(mtn->tr);
 			break;
+
+		case TKVDB_MTN_WAITFREE_MPMC:
+			/* return TKVDB_CORRUPTED */
+			break;
 	}
 
 	return rc;
@@ -444,7 +473,10 @@ tkvdb_mtn_commit(tkvdb_mtn *mtn)
 					->commit(mtn->data.spmc_banks[0]);
 				mtn->tr = mtn->data.spmc_banks[0];
 			}
+			break;
 
+		case TKVDB_MTN_WAITFREE_MPMC:
+			/* return TKVDB_CORRUPTED */
 			break;
 	}
 
@@ -473,6 +505,10 @@ tkvdb_mtn_rollback(tkvdb_mtn *mtn)
 				mtn->tr = mtn->data.spmc_banks[0];
 			}
 			break;
+
+		case TKVDB_MTN_WAITFREE_MPMC:
+			/* return TKVDB_CORRUPTED */
+			break;
 	}
 
 	return rc;
@@ -491,6 +527,10 @@ tkvdb_mtn_put(tkvdb_mtn *mtn, const tkvdb_datum *key, const tkvdb_datum *val)
 		case TKVDB_MTN_WAITFREE_SPMC:
 			rc = mtn->tr->put(mtn->tr, key, val);
 			break;
+
+		case TKVDB_MTN_WAITFREE_MPMC:
+			/* return TKVDB_CORRUPTED */
+			break;
 	}
 
 	return rc;
@@ -501,6 +541,8 @@ tkvdb_mtn_get(tkvdb_mtn *mtn, const tkvdb_datum *key, tkvdb_datum *val)
 {
 	TKVDB_RES rc = TKVDB_CORRUPTED;
 	int lr;
+	tkvdb_tr *tr;
+	struct mpmcdata *mpmc;
 
 	switch (mtn->type) {
 		LOCKED_CASE( mtn->tr->get(mtn->tr, key, val) , rc,
@@ -508,6 +550,13 @@ tkvdb_mtn_get(tkvdb_mtn *mtn, const tkvdb_datum *key, tkvdb_datum *val)
 
 		case TKVDB_MTN_WAITFREE_SPMC:
 			rc = mtn->tr->get(mtn->tr, key, val);
+			break;
+
+		case TKVDB_MTN_WAITFREE_MPMC:
+			mpmc = &(mtn->data.mpmc);
+			tr = mpmc->banks[(mpmc->bank_ptr + MPMC_BANK_UPDATED)
+				% MPMC_BANKS];
+			rc = tr->get(tr, key, val);
 			break;
 	}
 
@@ -526,6 +575,10 @@ tkvdb_mtn_del(tkvdb_mtn *mtn, const tkvdb_datum *key, int del_pfx)
 
 		case TKVDB_MTN_WAITFREE_SPMC:
 			rc = mtn->tr->del(mtn->tr, key, del_pfx);
+			break;
+
+		case TKVDB_MTN_WAITFREE_MPMC:
+			/* return TKVDB_CORRUPTED */
 			break;
 	}
 

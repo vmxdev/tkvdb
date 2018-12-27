@@ -20,10 +20,12 @@ typedef enum TKVDB_MTN_TYPE
 typedef struct tkvdb_mtn tkvdb_mtn;
 typedef struct tkvdb_mtn_cursor tkvdb_mtn_cursor;
 
+typedef void (*mpmc_aggr)(const void *a, const void *b);
+
 tkvdb_mtn *tkvdb_mtn_create_locked(tkvdb_tr *tr, TKVDB_MTN_TYPE type);
 tkvdb_mtn *tkvdb_mtn_create_spmc(tkvdb_tr *tr1, tkvdb_tr *tr2);
 tkvdb_mtn *tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
-	int ns_sleep);
+	mpmc_aggr aggr_func, int ns_sleep);
 
 void tkvdb_mtn_free(tkvdb_mtn *mtn);
 
