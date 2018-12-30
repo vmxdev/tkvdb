@@ -64,9 +64,13 @@ while (NODE->c.replaced_by) {              \
 
 /* replace node with updated one */
 /* FIXME: (optional) memory barrier? */
-#define TKVDB_REPLACE_NODE(NODE, NEWNODE)  \
-do {                                       \
-	NODE->c.replaced_by = NEWNODE;     \
+#define TKVDB_REPLACE_NODE(REPLACE_CHAIN, RCHAIN_START, NODE, NEWNODE) \
+do {                                                                   \
+	if (REPLACE_CHAIN) {                                           \
+		RCHAIN_START->c.replaced_by = NEWNODE;                 \
+	} else {                                                       \
+		NODE->c.replaced_by = NEWNODE;                         \
+	}                                                              \
 } while (0)
 
 struct tkvdb_params

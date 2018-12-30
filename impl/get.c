@@ -48,6 +48,7 @@ TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 
 next_node:
 	TKVDB_SKIP_RNODES(node);
+
 	pi = 0;
 	if (node->c.type & TKVDB_NODE_LEAF) {
 		prefix_val_meta =

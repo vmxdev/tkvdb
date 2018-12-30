@@ -148,7 +148,7 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 	new_node->c.disk_size = 0;
 	new_node->c.disk_off = 0;
 
-	TKVDB_REPLACE_NODE(prev, new_node);
+	TKVDB_REPLACE_NODE(0, prev, prev, new_node);
 
 	return TKVDB_OK;
 }
@@ -188,6 +188,7 @@ TKVDB_IMPL_DEL(tkvdb_tr *trns, const tkvdb_datum *key, int del_pfx)
 
 next_node:
 	TKVDB_SKIP_RNODES(node);
+
 	pi = 0;
 	if (node->c.type & TKVDB_NODE_LEAF) {
 		prefix_val_meta =

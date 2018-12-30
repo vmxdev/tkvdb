@@ -417,6 +417,7 @@ TKVDB_IMPL_SEEK(tkvdb_cursor *cr, const tkvdb_datum *key, TKVDB_SEEK seek)
 
 next_node:
 	TKVDB_SKIP_RNODES(node);
+
 	pi = 0;
 	if (node->c.type & TKVDB_NODE_LEAF) {
 		prefix_val_meta =

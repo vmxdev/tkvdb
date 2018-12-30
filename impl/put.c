@@ -23,6 +23,8 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 	const unsigned char *sym;  /* pointer to current symbol in key */
 	TKVDB_MEMNODE_TYPE *node;  /* current node */
 	size_t pi;                 /* prefix index */
+	/* replaced nodes chain start */
+	TKVDB_MEMNODE_TYPE *rnodes_chain = NULL;
 
 	/* pointer to data of node(prefix, value, metadata)
 	   it can be different for leaf and ordinary nodes */
@@ -65,6 +67,7 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 	node = tr->root;
 
 next_node:
+	rnodes_chain = node;
 	TKVDB_SKIP_RNODES(node);
 
 	if (node->c.type & TKVDB_NODE_LEAF) {
@@ -111,7 +114,8 @@ next_byte:
 
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
 
-			TKVDB_REPLACE_NODE(node, newroot);
+			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
+				rnodes_chain, node, newroot);
 
 			return TKVDB_OK;
 		}
@@ -145,7 +149,8 @@ next_byte:
 
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
 
-		TKVDB_REPLACE_NODE(node, newroot);
+		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
+			rnodes_chain, node, newroot);
 
 		return TKVDB_OK;
 	}
@@ -188,7 +193,8 @@ next_byte:
 
 			newroot->next[*sym] = subnode_rest;
 
-			TKVDB_REPLACE_NODE(node, newroot);
+			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
+				rnodes_chain, node, newroot);
 
 			return TKVDB_OK;
 		} else if (node->next[*sym] != NULL) {
@@ -278,7 +284,8 @@ next_byte:
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
 		newroot->next[*sym] = subnode_key;
 
-		TKVDB_REPLACE_NODE(node, newroot);
+		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
+			rnodes_chain, node, newroot);
 
 		return TKVDB_OK;
 	}
