@@ -1,7 +1,7 @@
 /*
  * tkvdb
  *
- * Copyright (c) 2016-2018, Vladimir Misyurov
+ * Copyright (c) 2016-2019, Vladimir Misyurov
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -132,6 +132,8 @@ do {                                                                       \
 	node_common->disk_size = 0;
 	node_common->disk_off = 0;
 
+	node_common->nsubnodes = 0;
+
 	if (type & TKVDB_NODE_LEAF) {
 		if (prefix_size > 0) {
 			memcpy(node_leaf->prefix_val_meta,
@@ -179,6 +181,7 @@ TKVDB_IMPL_CLONE_SUBNODES(TKVDB_MEMNODE_TYPE *dst, TKVDB_MEMNODE_TYPE *src)
 		memcpy(dst->fnext, src->fnext, sizeof(uint64_t) * 256);
 #endif
 	}
+	dst->c.nsubnodes = src->c.nsubnodes;
 }
 
 /* read node from disk */
@@ -270,6 +273,8 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 
 	(*node_ptr)->c.disk_size = 0;
 	(*node_ptr)->c.disk_off = 0;
+
+	(*node_ptr)->c.nsubnodes = disknode->nsubnodes;
 
 	ptr = disknode->data;
 

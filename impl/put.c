@@ -1,7 +1,7 @@
 /*
  * tkvdb
  *
- * Copyright (c) 2016-2018, Vladimir Misyurov
+ * Copyright (c) 2016-2019, Vladimir Misyurov
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -148,6 +148,7 @@ next_byte:
 		TKVDB_IMPL_CLONE_SUBNODES(subnode_rest, node);
 
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
+		newroot->c.nsubnodes += 1;
 
 		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 			rnodes_chain, node, newroot);
@@ -191,6 +192,7 @@ next_byte:
 				val->size, val->data);
 			if (!subnode_rest) return TKVDB_ENOMEM;
 
+			newroot->c.nsubnodes += 1;
 			newroot->next[*sym] = subnode_rest;
 
 			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
@@ -231,6 +233,7 @@ next_byte:
 			if (!tmp) return TKVDB_ENOMEM;
 
 			node->next[*sym] = tmp;
+			node->c.nsubnodes += 1; /* XXX: not atomic */
 			return TKVDB_OK;
 		}
 	}
@@ -283,6 +286,7 @@ next_byte:
 
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
 		newroot->next[*sym] = subnode_key;
+		newroot->c.nsubnodes += 2;
 
 		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 			rnodes_chain, node, newroot);

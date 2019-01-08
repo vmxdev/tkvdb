@@ -1,7 +1,7 @@
 /*
  * tkvdb
  *
- * Copyright (c) 2016-2018, Vladimir Misyurov
+ * Copyright (c) 2016-2019, Vladimir Misyurov
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -164,18 +164,6 @@ TKVDB_IMPL_NODE_TO_BUF(tkvdb *db, TKVDB_MEMNODE_TYPE *node,
 static void
 TKVDB_IMPL_NODE_CALC_DISKSIZE(TKVDB_MEMNODE_TYPE *node)
 {
-	unsigned int i;
-
-	node->c.nsubnodes = 0;
-
-	if (!(node->c.type & TKVDB_NODE_LEAF)) {
-		for (i=0; i<256; i++) {
-			if (node->next[i] || node->fnext[i]) {
-				node->c.nsubnodes++;
-			}
-		}
-	}
-
 	node->c.disk_size = sizeof(struct tkvdb_disknode) - 1;
 
 	/* if node has value add 4 bytes for value size */

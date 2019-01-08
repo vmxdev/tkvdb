@@ -1,7 +1,7 @@
 /*
  * tkvdb
  *
- * Copyright (c) 2016-2018, Vladimir Misyurov
+ * Copyright (c) 2016-2019, Vladimir Misyurov
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,8 +21,6 @@ static TKVDB_RES
 TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 	TKVDB_MEMNODE_TYPE *prev, int prev_off, int del_pfx)
 {
-	int i, n_subnodes = 0, concat_sym = -1;
-	TKVDB_MEMNODE_TYPE *new_node, *old_node;
 	tkvdb_tr_data *tr = trns->data;
 
 	if (!prev) {
@@ -45,110 +43,23 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 		TKVDB_IMPL_NODE_FREE(tr, node);
 		return TKVDB_OK;
 	} else if (node->c.type & TKVDB_NODE_VAL) {
-		/* check if we have at least 1 subnode */
-		if (!(node->c.type & TKVDB_NODE_LEAF)) {
-			for (i=0; i<256; i++) {
-				if (node->next[i]
-#ifndef TKVDB_PARAMS_NODBFILE
-				|| node->fnext[i]
-#endif
-					) {
-					n_subnodes = 1;
-					break;
-				}
-			}
-		}
-
-		if (!n_subnodes) {
+		if (node->c.nsubnodes != 0) {
+			/* we have subnodes, so just clear value bit */
+			node->c.type &= ~TKVDB_NODE_VAL;
+		} else {
 			/* no subnodes, delete node */
 			prev->next[prev_off] = NULL;
 #ifndef TKVDB_PARAMS_NODBFILE
 			prev->fnext[prev_off] = 0;
 #endif
+
+			prev->c.nsubnodes -= 1; /* XXX: not atomic */
+
 			TKVDB_IMPL_NODE_FREE(tr, node);
-			return TKVDB_OK;
 		}
-		/* we have subnodes, so just clear value bit */
-		node->c.type &= ~TKVDB_NODE_VAL;
-		return TKVDB_OK;
 	} else {
 		return TKVDB_NOT_FOUND;
 	}
-
-	if (prev->c.type & TKVDB_NODE_VAL) {
-		return TKVDB_OK;
-	}
-
-	/* calculate number of subnodes in parent (prev) */
-	for (i=0; i<256; i++) {
-		if (prev->next[i]
-#ifndef TKVDB_PARAMS_NODBFILE
-			|| prev->fnext[i]
-#endif
-			) {
-			n_subnodes++;
-			if (n_subnodes > 1) {
-				/* more than one subnode */
-				return TKVDB_OK;
-			}
-			concat_sym = i;
-		}
-	}
-
-	if (n_subnodes == 0) {
-		return TKVDB_CORRUPTED;
-	}
-
-
-	/* we have parent node with just one subnode */
-	old_node = prev->next[concat_sym];
-	if (!old_node) {
-#ifndef TKVDB_PARAMS_NODBFILE
-		TKVDB_EXEC( TKVDB_IMPL_NODE_READ(trns, prev->fnext[concat_sym],
-			&old_node) );
-#endif
-	}
-	/* allocate new (concatenated) node */
-	new_node = TKVDB_IMPL_NODE_ALLOC(trns, sizeof(TKVDB_MEMNODE_TYPE)
-		+ prev->c.prefix_size + 1
-		+ old_node->c.prefix_size
-		+ old_node->c.val_size + old_node->c.meta_size);
-	if (!new_node) {
-		return TKVDB_ENOMEM;
-	}
-
-	new_node->c.type = old_node->c.type;
-	new_node->c.prefix_size = prev->c.prefix_size
-		+ 1 + old_node->c.prefix_size;
-	new_node->c.val_size = old_node->c.val_size;
-	new_node->c.meta_size = old_node->c.meta_size;
-
-	if (prev->c.prefix_size > 0) {
-		memcpy(new_node->prefix_val_meta, prev->prefix_val_meta,
-			prev->c.prefix_size);
-	}
-	new_node->prefix_val_meta[prev->c.prefix_size] = concat_sym;
-	if (old_node->c.prefix_size > 0) {
-		memcpy(new_node->prefix_val_meta + prev->c.prefix_size + 1,
-			old_node->prefix_val_meta,
-			old_node->c.prefix_size);
-	}
-
-	if (old_node->c.val_size > 0) {
-		memcpy(new_node->prefix_val_meta + new_node->c.prefix_size,
-			old_node->prefix_val_meta + old_node->c.prefix_size,
-			old_node->c.val_size);
-	}
-	memcpy(new_node->next, old_node->next,
-		sizeof(TKVDB_MEMNODE_TYPE *) * 256);
-#ifndef TKVDB_PARAMS_NODBFILE
-	memcpy(new_node->fnext, old_node->fnext, sizeof(uint64_t) * 256);
-#endif
-
-	new_node->c.disk_size = 0;
-	new_node->c.disk_off = 0;
-
-	TKVDB_REPLACE_NODE(0, prev, prev, new_node);
 
 	return TKVDB_OK;
 }
@@ -251,6 +162,5 @@ next_byte:
 
 	return TKVDB_OK;
 }
-
 
 

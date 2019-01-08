@@ -434,6 +434,12 @@ test_del(void)
 		}
 	}
 
+	/* save data to disk */
+	TEST_CHECK(tr->commit(tr) == TKVDB_OK);
+
+	/* start transaction again */
+	TEST_CHECK(tr->begin(tr) == TKVDB_OK);
+
 	c = tkvdb_cursor_create(tr);
 	TEST_CHECK(c != NULL);
 
@@ -450,9 +456,9 @@ test_del(void)
 	} while ((r = c->next(c)) == TKVDB_OK);
 
 	TEST_CHECK(i == N);
+	TEST_CHECK(tr->rollback(tr) == TKVDB_OK);
 
 	c->free(c);
-	TEST_CHECK(tr->rollback(tr) == TKVDB_OK);
 
 	tr->free(tr);
 	tkvdb_close(db);
