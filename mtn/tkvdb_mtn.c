@@ -4,27 +4,27 @@
 
 #include "tkvdb_mtn.h"
 
-/* We're using 3 mpmc banks:
+/* We're using 3 mwmr banks:
  * 1. for stalled readers
  * 2. active
  * 3. currently updated
  */
-#define MPMC_BANKS 3
-#define MPMC_BANK_STALLED  0
-#define MPMC_BANK_ACTIVE   1
-#define MPMC_BANK_UPDATED  2
+#define MWMR_BANKS 3
+#define MWMR_BANK_STALLED  0
+#define MWMR_BANK_ACTIVE   1
+#define MWMR_BANK_UPDATED  2
 
-struct mpmcdata
+struct mwmrdata
 {
-	tkvdb_tr *banks[MPMC_BANKS];
+	tkvdb_tr *banks[MWMR_BANKS];
 	unsigned int bank_ptr;
 
-	mpmc_aggr aggr_func;
+	mwmr_aggr aggr_func;
 
 	int ns_sleep;
 
-	size_t nproducers;
-	tkvdb_mtn **producers;
+	size_t nwriters;
+	tkvdb_mtn **writers;
 
 	size_t nsubaggrs;
 	tkvdb_mtn **subaggrs;
@@ -46,7 +46,7 @@ struct tkvdb_mtn
 		pthread_mutex_t mutex;
 		pthread_spinlock_t spin;
 		tkvdb_tr *spmc_banks[2];
-		struct mpmcdata mpmc;
+		struct mwmrdata mwmr;
 	} data;
 
 	tkvdb_tr *tr;
@@ -101,7 +101,7 @@ fail_alloc:
 	return NULL;
 }
 
-/* "wait-free" single producer, multiple consumers */
+/* "wait-free" single writer, multiple readers */
 tkvdb_mtn *
 tkvdb_mtn_create_spmc(tkvdb_tr *tr1, tkvdb_tr *tr2)
 {
@@ -112,7 +112,7 @@ tkvdb_mtn_create_spmc(tkvdb_tr *tr1, tkvdb_tr *tr2)
 		goto fail_alloc;
 	}
 
-	mtn->type = TKVDB_MTN_WAITFREE_SPMC;
+	mtn->type = TKVDB_MTN_WAITFREE_SWMR;
 
 	mtn->data.spmc_banks[0] = tr1;
 	mtn->data.spmc_banks[1] = tr2;
@@ -126,21 +126,21 @@ fail_alloc:
 }
 
 
-/* "wait-free" multiple producers, multiple consumers */
+/* "wait-free" multiple writers, multiple readers */
 static void
-tkvdb_mtn_mpmc_pendingadd(struct mpmcdata *mpmc)
+tkvdb_mtn_mwmr_pendingadd(struct mwmrdata *mwmr)
 {
 	size_t i, j;
 
-	pthread_mutex_lock(&mpmc->pending_mutex);
+	pthread_mutex_lock(&mwmr->pending_mutex);
 
-	for (i=0; i<mpmc->npendingadd; i++) {
-		/* skip existing producers */
+	for (i=0; i<mwmr->npendingadd; i++) {
+		/* skip existing writers */
 		int found = 0;
-		tkvdb_mtn **tmpprod;
+		tkvdb_mtn **tmpwr;
 
-		for (j=0; j<mpmc->nproducers; j++) {
-			if (mpmc->pendingadd[i] == mpmc->producers[j]) {
+		for (j=0; j<mwmr->nwriters; j++) {
+			if (mwmr->pendingadd[i] == mwmr->writers[j]) {
 				found = 1;
 			}
 		}
@@ -150,50 +150,50 @@ tkvdb_mtn_mpmc_pendingadd(struct mpmcdata *mpmc)
 			continue;
 		}
 
-		tmpprod = realloc(mpmc->producers,
+		tmpwr = realloc(mwmr->writers,
 			sizeof(tkvdb_mtn *)
-			* (mpmc->nproducers + 1));
+			* (mwmr->nwriters + 1));
 
-		if (!tmpprod) {
+		if (!tmpwr) {
 			/* do nothing */
 			continue;
 		}
-		mpmc->producers = tmpprod;
-		mpmc->producers[mpmc->nproducers] = mpmc->pendingadd[i];
-		mpmc->nproducers++;
+		mwmr->writers = tmpwr;
+		mwmr->writers[mwmr->nwriters] = mwmr->pendingadd[i];
+		mwmr->nwriters++;
 	}
 
-	pthread_mutex_unlock(&mpmc->pending_mutex);
+	pthread_mutex_unlock(&mwmr->pending_mutex);
 }
 
-/* mpmc merge thread */
+/* mwmr merge thread */
 static void *
-tkvdb_mtn_mpmc_thread(void *arg)
+tkvdb_mtn_mwmr_thread(void *arg)
 {
-	struct mpmcdata *mpmc;
+	struct mwmrdata *mwmr;
 	struct timespec delay;
 	const int billion = 1000000000;
 
-	mpmc = arg;
-	delay.tv_sec  = mpmc->ns_sleep / billion;
-	delay.tv_nsec = mpmc->ns_sleep % billion;
+	mwmr = arg;
+	delay.tv_sec  = mwmr->ns_sleep / billion;
+	delay.tv_nsec = mwmr->ns_sleep % billion;
 
-	while (!mpmc->stop) {
+	while (!mwmr->stop) {
 		size_t i;
 		tkvdb_tr *tr;
 
-		tr = mpmc->banks[(mpmc->bank_ptr + MPMC_BANK_UPDATED)
-			% MPMC_BANKS];
+		tr = mwmr->banks[(mwmr->bank_ptr + MWMR_BANK_UPDATED)
+			% MWMR_BANKS];
 
 		tr->rollback(tr);
 		tr->begin(tr);
 
-		for (i=0; i<mpmc->nproducers; i++) {
+		for (i=0; i<mwmr->nwriters; i++) {
 			tkvdb_mtn_cursor *c;
 			TKVDB_RES rc;
 
 			/* create cursor */
-			c = tkvdb_mtn_cursor_create(mpmc->producers[i]);
+			c = tkvdb_mtn_cursor_create(mwmr->writers[i]);
 			if (!c) {
 				/* error */
 				break;
@@ -209,7 +209,7 @@ tkvdb_mtn_mpmc_thread(void *arg)
 				rc = tr->get(tr, &dtk, &dtv);
 				if (rc == TKVDB_OK) {
 					/* apply aggregation function */
-					(*mpmc->aggr_func)(dtv.data,
+					(*mwmr->aggr_func)(dtv.data,
 						tkvdb_mtn_cursor_val(c));
 				} else {
 					/* new k-v pair */
@@ -224,26 +224,26 @@ tkvdb_mtn_mpmc_thread(void *arg)
 			tkvdb_mtn_cursor_free(c);
 		}
 
-		if (mpmc->ns_sleep) {
+		if (mwmr->ns_sleep) {
 			clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, NULL);
 		}
 
-		/* check for new producers */
-		if (mpmc->npendingadd) {
-			tkvdb_mtn_mpmc_pendingadd(mpmc);
+		/* check for new writers */
+		if (mwmr->npendingadd) {
+			tkvdb_mtn_mwmr_pendingadd(mwmr);
 		}
 
 		/* switch banks */
-		mpmc->bank_ptr++;
+		mwmr->bank_ptr++;
 	}
 	return NULL;
 }
 
-/* create multiple producers/multiple consumers transaction
+/* create multiple writers/multiple readers transaction
    and start merge thread */
 tkvdb_mtn *
-tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
-	mpmc_aggr aggr_func, int ns_sleep)
+tkvdb_mtn_create_mwmr(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
+	mwmr_aggr aggr_func, int ns_sleep)
 {
 	tkvdb_mtn *mtn;
 
@@ -252,35 +252,35 @@ tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
 		goto fail_alloc;
 	}
 
-	if (pthread_mutex_init(&mtn->data.mpmc.pending_mutex, NULL) != 0) {
+	if (pthread_mutex_init(&mtn->data.mwmr.pending_mutex, NULL) != 0) {
 		goto fail_alloc;
 	}
 
-	mtn->type = TKVDB_MTN_WAITFREE_MPMC;
+	mtn->type = TKVDB_MTN_WAITFREE_MWMR;
 
 	mtn->tr = tr1;
 
-	mtn->data.mpmc.banks[0] = tr1;
-	mtn->data.mpmc.banks[1] = tr2;
-	mtn->data.mpmc.banks[2] = tr3;
+	mtn->data.mwmr.banks[0] = tr1;
+	mtn->data.mwmr.banks[1] = tr2;
+	mtn->data.mwmr.banks[2] = tr3;
 
-	mtn->data.mpmc.bank_ptr = 0;
+	mtn->data.mwmr.bank_ptr = 0;
 
-	mtn->data.mpmc.ns_sleep = ns_sleep;
+	mtn->data.mwmr.ns_sleep = ns_sleep;
 
-	mtn->data.mpmc.nproducers = 0;
-	mtn->data.mpmc.producers = NULL;
+	mtn->data.mwmr.nwriters = 0;
+	mtn->data.mwmr.writers = NULL;
 
-	mtn->data.mpmc.nsubaggrs = 0;
-	mtn->data.mpmc.subaggrs = NULL;
+	mtn->data.mwmr.nsubaggrs = 0;
+	mtn->data.mwmr.subaggrs = NULL;
 
-	mtn->data.mpmc.stop  = 0;
+	mtn->data.mwmr.stop  = 0;
 
-	mtn->data.mpmc.aggr_func  = aggr_func;
+	mtn->data.mwmr.aggr_func  = aggr_func;
 
 	/* start merge thread */
-	if (pthread_create(&mtn->data.mpmc.tid, NULL,
-		&tkvdb_mtn_mpmc_thread, mtn) != 0) {
+	if (pthread_create(&mtn->data.mwmr.tid, NULL,
+		&tkvdb_mtn_mwmr_thread, mtn) != 0) {
 
 		goto fail_thread;
 	}
@@ -295,33 +295,33 @@ fail_alloc:
 }
 
 int
-tkvdb_mtn_mpmc_add_producer(tkvdb_mtn *mpmc, tkvdb_mtn *subaggr, tkvdb_mtn *p)
+tkvdb_mtn_mwmr_add_writer(tkvdb_mtn *mwmr, tkvdb_mtn *subaggr, tkvdb_mtn *p)
 {
 	tkvdb_mtn **tmppadd;
 
-	if (mpmc->type != TKVDB_MTN_WAITFREE_MPMC) {
+	if (mwmr->type != TKVDB_MTN_WAITFREE_MWMR) {
 		return 0;
 	}
 
 	if (subaggr) {
 	}
 
-	pthread_mutex_lock(&mpmc->data.mpmc.pending_mutex);
+	pthread_mutex_lock(&mwmr->data.mwmr.pending_mutex);
 
-	/* append producer to pending producers */
-	tmppadd = realloc(mpmc->data.mpmc.pendingadd,
+	/* append writer to pending writers */
+	tmppadd = realloc(mwmr->data.mwmr.pendingadd,
 		sizeof(struct tkvdb_mtn *)
-		* (mpmc->data.mpmc.npendingadd) + 1);
+		* (mwmr->data.mwmr.npendingadd) + 1);
 
 	if (!tmppadd) {
 		return 0;
 	}
 
-	mpmc->data.mpmc.pendingadd = tmppadd;
-	mpmc->data.mpmc.pendingadd[mpmc->data.mpmc.npendingadd] = p;
-	mpmc->data.mpmc.npendingadd++;
+	mwmr->data.mwmr.pendingadd = tmppadd;
+	mwmr->data.mwmr.pendingadd[mwmr->data.mwmr.npendingadd] = p;
+	mwmr->data.mwmr.npendingadd++;
 
-	pthread_mutex_unlock(&mpmc->data.mpmc.pending_mutex);
+	pthread_mutex_unlock(&mwmr->data.mwmr.pending_mutex);
 
 	return 1;
 }
@@ -340,12 +340,12 @@ tkvdb_mtn_free(tkvdb_mtn *mtn)
 			pthread_spin_destroy(&mtn->data.spin);
 			break;
 
-		case TKVDB_MTN_WAITFREE_SPMC:
+		case TKVDB_MTN_WAITFREE_SWMR:
 			break;
 
-		case TKVDB_MTN_WAITFREE_MPMC:
-			mtn->data.mpmc.stop = 1;
-			pthread_join(mtn->data.mpmc.tid, NULL);
+		case TKVDB_MTN_WAITFREE_MWMR:
+			mtn->data.mwmr.stop = 1;
+			pthread_join(mtn->data.mwmr.tid, NULL);
 			break;
 	}
 
@@ -440,11 +440,11 @@ tkvdb_mtn_begin(tkvdb_mtn *mtn)
 		LOCKED_CASE( mtn->tr->begin(mtn->tr) , rc,
 			&mtn->data.mutex, &mtn->data.spin, lr);
 
-		case TKVDB_MTN_WAITFREE_SPMC:
+		case TKVDB_MTN_WAITFREE_SWMR:
 			rc = mtn->tr->begin(mtn->tr);
 			break;
 
-		case TKVDB_MTN_WAITFREE_MPMC:
+		case TKVDB_MTN_WAITFREE_MWMR:
 			/* return TKVDB_CORRUPTED */
 			break;
 	}
@@ -462,7 +462,7 @@ tkvdb_mtn_commit(tkvdb_mtn *mtn)
 		LOCKED_CASE( mtn->tr->commit(mtn->tr) , rc,
 			&mtn->data.mutex, &mtn->data.spin, lr);
 
-		case TKVDB_MTN_WAITFREE_SPMC:
+		case TKVDB_MTN_WAITFREE_SWMR:
 			/* commit unused bank and switch to it */
 			if (mtn->tr == mtn->data.spmc_banks[0]) {
 				rc = mtn->data.spmc_banks[1]
@@ -475,7 +475,7 @@ tkvdb_mtn_commit(tkvdb_mtn *mtn)
 			}
 			break;
 
-		case TKVDB_MTN_WAITFREE_MPMC:
+		case TKVDB_MTN_WAITFREE_MWMR:
 			/* return TKVDB_CORRUPTED */
 			break;
 	}
@@ -493,7 +493,7 @@ tkvdb_mtn_rollback(tkvdb_mtn *mtn)
 		LOCKED_CASE( mtn->tr->rollback(mtn->tr) , rc,
 			&mtn->data.mutex, &mtn->data.spin, lr);
 
-		case TKVDB_MTN_WAITFREE_SPMC:
+		case TKVDB_MTN_WAITFREE_SWMR:
 			/* reset unused bank and switch to it */
 			if (mtn->tr == mtn->data.spmc_banks[0]) {
 				rc = mtn->data.spmc_banks[1]
@@ -506,7 +506,7 @@ tkvdb_mtn_rollback(tkvdb_mtn *mtn)
 			}
 			break;
 
-		case TKVDB_MTN_WAITFREE_MPMC:
+		case TKVDB_MTN_WAITFREE_MWMR:
 			/* return TKVDB_CORRUPTED */
 			break;
 	}
@@ -524,11 +524,11 @@ tkvdb_mtn_put(tkvdb_mtn *mtn, const tkvdb_datum *key, const tkvdb_datum *val)
 		LOCKED_CASE( mtn->tr->put(mtn->tr, key, val) , rc,
 			&mtn->data.mutex, &mtn->data.spin, lr);
 
-		case TKVDB_MTN_WAITFREE_SPMC:
+		case TKVDB_MTN_WAITFREE_SWMR:
 			rc = mtn->tr->put(mtn->tr, key, val);
 			break;
 
-		case TKVDB_MTN_WAITFREE_MPMC:
+		case TKVDB_MTN_WAITFREE_MWMR:
 			/* return TKVDB_CORRUPTED */
 			break;
 	}
@@ -542,20 +542,20 @@ tkvdb_mtn_get(tkvdb_mtn *mtn, const tkvdb_datum *key, tkvdb_datum *val)
 	TKVDB_RES rc = TKVDB_CORRUPTED;
 	int lr;
 	tkvdb_tr *tr;
-	struct mpmcdata *mpmc;
+	struct mwmrdata *mwmr;
 
 	switch (mtn->type) {
 		LOCKED_CASE( mtn->tr->get(mtn->tr, key, val) , rc,
 			&mtn->data.mutex, &mtn->data.spin, lr);
 
-		case TKVDB_MTN_WAITFREE_SPMC:
+		case TKVDB_MTN_WAITFREE_SWMR:
 			rc = mtn->tr->get(mtn->tr, key, val);
 			break;
 
-		case TKVDB_MTN_WAITFREE_MPMC:
-			mpmc = &(mtn->data.mpmc);
-			tr = mpmc->banks[(mpmc->bank_ptr + MPMC_BANK_UPDATED)
-				% MPMC_BANKS];
+		case TKVDB_MTN_WAITFREE_MWMR:
+			mwmr = &(mtn->data.mwmr);
+			tr = mwmr->banks[(mwmr->bank_ptr + MWMR_BANK_UPDATED)
+				% MWMR_BANKS];
 			rc = tr->get(tr, key, val);
 			break;
 	}
@@ -573,11 +573,11 @@ tkvdb_mtn_del(tkvdb_mtn *mtn, const tkvdb_datum *key, int del_pfx)
 		LOCKED_CASE( mtn->tr->del(mtn->tr, key, del_pfx) , rc,
 			&mtn->data.mutex, &mtn->data.spin, lr);
 
-		case TKVDB_MTN_WAITFREE_SPMC:
+		case TKVDB_MTN_WAITFREE_SWMR:
 			rc = mtn->tr->del(mtn->tr, key, del_pfx);
 			break;
 
-		case TKVDB_MTN_WAITFREE_MPMC:
+		case TKVDB_MTN_WAITFREE_MWMR:
 			/* return TKVDB_CORRUPTED */
 			break;
 	}

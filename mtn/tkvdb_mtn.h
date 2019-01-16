@@ -13,19 +13,19 @@ typedef enum TKVDB_MTN_TYPE
 	TKVDB_MTN_MUTEX_TRY,
 	TKVDB_MTN_SPINLOCK,
 	TKVDB_MTN_SPINLOCK_TRY,
-	TKVDB_MTN_WAITFREE_SPMC,
-	TKVDB_MTN_WAITFREE_MPMC
+	TKVDB_MTN_WAITFREE_SWMR,
+	TKVDB_MTN_WAITFREE_MWMR
 } TKVDB_MTN_TYPE;
 
 typedef struct tkvdb_mtn tkvdb_mtn;
 typedef struct tkvdb_mtn_cursor tkvdb_mtn_cursor;
 
-typedef void (*mpmc_aggr)(const void *a, const void *b);
+typedef void (*mwmr_aggr)(const void *a, const void *b);
 
 tkvdb_mtn *tkvdb_mtn_create_locked(tkvdb_tr *tr, TKVDB_MTN_TYPE type);
 tkvdb_mtn *tkvdb_mtn_create_spmc(tkvdb_tr *tr1, tkvdb_tr *tr2);
-tkvdb_mtn *tkvdb_mtn_create_mpmc(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
-	mpmc_aggr aggr_func, int ns_sleep);
+tkvdb_mtn *tkvdb_mtn_create_mwmr(tkvdb_tr *tr1, tkvdb_tr *tr2, tkvdb_tr *tr3,
+	mwmr_aggr aggr_func, int ns_sleep);
 
 void tkvdb_mtn_free(tkvdb_mtn *mtn);
 
@@ -63,8 +63,8 @@ TKVDB_RES tkvdb_mtn_cursor_prev(tkvdb_mtn_cursor *c);
 
 void tkvdb_mtn_cursor_free(tkvdb_mtn_cursor *c);
 
-/* multiple producers/multiple consumers */
-int tkvdb_mtn_mpmc_add(tkvdb_mtn *mpmc, tkvdb_mtn *mtn);
+/* multiple writers/multiple readers */
+int tkvdb_mtn_mwmr_add(tkvdb_mtn *mwmr, tkvdb_mtn *mtn);
 
 #ifdef __cplusplus
 }
