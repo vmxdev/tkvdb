@@ -49,7 +49,10 @@ typedef enum TKVDB_PARAM
 	TKVDB_PARAM_CURSOR_STACK_DYNALLOC,
 
 	/* cursors stacks size limit, default SIZE_MAX */
-	TKVDB_PARAM_CURSOR_STACK_LIMIT
+	TKVDB_PARAM_CURSOR_STACK_LIMIT,
+
+	/* flags passed to open() function */
+	TKVDB_PARAM_DBFILE_OPEN_FLAGS
 } TKVDB_PARAM;
 
 typedef struct tkvdb_datum

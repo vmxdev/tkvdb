@@ -399,6 +399,9 @@ tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val)
 			params->stack_limit = (size_t)val
 				/ sizeof(struct tkvdb_visit_helper);
 			break;
+		case TKVDB_PARAM_DBFILE_OPEN_FLAGS:
+			params->flags = val;
+			break;
 		default:
 			break;
 	}
