@@ -433,11 +433,12 @@ next_byte:
 			&& (node->c.type & TKVDB_NODE_VAL)) {
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND(cr,
 				prefix_val_meta, node->c.prefix_size) );
-			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, *sym) );
+			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, -1) );
 			return TKVDB_OK;
 		}
 
 		if (seek == TKVDB_SEEK_EQ) {
+			tkvdb_cursor_reset(cr);
 			return TKVDB_NOT_FOUND;
 		}
 
