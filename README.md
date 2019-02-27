@@ -147,7 +147,7 @@ But be careful with `transaction->rollback()` and `transaction->commit()` - ther
 
 ## Bugs and caveats (sort of TODO)
 
-  * There is still no `vacuum` routine for database file. We have initial and bogus implementation, but it's not tested, so the database now is append-only.
+  * There is still no `vacuum` routine for database file. We have initial and bogus implementation, but it's not tested, so the database now is append-only. As a temporary workaround you can use `tkvdb-dump` and `tkvdb-restore`, see [utils](utils).
   * Cursors operations are slow (compared with `get()` or even `put()` with tkvdb builtin allocator). There is a call to `realloc()` on each node hit. Probably it will be fixed.
   * There is no easy way to get N-th record of database. However, it's possible to implement such seeks using some nodes metadata.
   * There is no publicly available benchmarks and nice performance charts. You can run `perf_test` from `extra` directory, it will show ops(inserts/updates and lookups) per second for 4 and 16 byte keys with different number of keys in transaction. Test is single-threaded and shows RAM-only operations. Depending on hardware you may get up to tens of millions ops per second (or even more than 100 millions lookups per second for short keys). Probably we will make more accurate, complete and readable performance tests.
