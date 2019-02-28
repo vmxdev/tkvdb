@@ -42,9 +42,6 @@ print_sym(FILE *out, int sym)
 		fputs("\\\"", out);
 	} else if (sym == '\\') {
 		fputs("\\\\", out);
-	} else if (sym == 0x1b) {
-		/* \e */
-		fputs("\\e", out);
 	} else {
 		fputc(sym, out);
 	}
@@ -81,7 +78,8 @@ print_usage(char *progname)
 	fprintf(stderr, "    out_file - name of output file "\
 		"(default to stdout)\n");
 	fprintf(stderr, "    size - size of transaction buffer in bytes "\
-		"(default %zu, min %d)\n", (size_t)DEF_TR_SIZE, MIN_TR_SIZE);
+		"(default %lu, min %d)\n",
+		(unsigned long int)DEF_TR_SIZE, MIN_TR_SIZE);
 	fprintf(stderr, "    -r - dump in reverse order\n");
 	fprintf(stderr, "    -h - print this message\n");
 }
@@ -145,7 +143,12 @@ main(int argc, char *argv[])
 			goto fail_out;
 		}
 	}
-
+#ifdef _WIN32
+	else {
+		/* set stdout to binary under Windows */
+		setmode(fileno(stdout), O_BINARY);
+	}
+#endif
 	/* init database parameters */
 	params = tkvdb_params_create();
 	if (!params) {

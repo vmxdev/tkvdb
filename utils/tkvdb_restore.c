@@ -158,8 +158,6 @@ again:
 					SYM_APPEND(in, c);
 				} else if (c == 'n') {
 					SYM_APPEND(in, '\n');
-				} else if (c == 'e') {
-					SYM_APPEND(in, 0x1b);
 				}
 			} else {
 				/* append symbol */
@@ -192,11 +190,12 @@ add_pair(struct input *in, tkvdb_tr *tr)
 	if (token == TOKEN_EOF) {
 		if (in->error) {
 			fprintf(stderr, "Unexpected EOF at line %lu\n",
-				in->line);
+				(unsigned long int)in->line);
 		}
 		return 0;
 	} else if (token != TOKEN_STRING) {
-		fprintf(stderr, "Expected quoted key at line %lu\n", in->line);
+		fprintf(stderr, "Expected quoted key at line %lu\n",
+			(unsigned long int)in->line);
 		return 0;
 	}
 
@@ -205,14 +204,14 @@ add_pair(struct input *in, tkvdb_tr *tr)
 	token = scan_input(in);
 	if (token != TOKEN_COLON) {
 		fprintf(stderr, "Expected ':' after key at line %lu\n",
-			in->line);
+			(unsigned long int)in->line);
 		return 0;
 	}
 
 	token = scan_input(in);
 	if (token != TOKEN_STRING) {
 		fprintf(stderr, "Expected value after ':' at line %lu\n",
-			in->line);
+			(unsigned long int)in->line);
 		return 0;
 	}
 
@@ -260,7 +259,8 @@ print_usage(char *progname)
 	fprintf(stderr, "    in_file - name of input dump file "\
 		"(default stdin)\n");
 	fprintf(stderr, "    size - size of transaction buffer in bytes "\
-		"(default %zu, min %d)\n", (size_t)DEF_TR_SIZE, MIN_TR_SIZE);
+		"(default %lu, min %d)\n",
+		(unsigned long int)DEF_TR_SIZE, MIN_TR_SIZE);
 	fprintf(stderr, "    -h - print this message\n");
 }
 
@@ -321,6 +321,12 @@ main(int argc, char *argv[])
 			goto fail_in;
 		}
 	}
+#ifdef _WIN32
+	else {
+		/* set stdin to binary under Windows */
+		setmode(fileno(stdin), O_BINARY);
+	}
+#endif
 
 	/* init database parameters */
 	params = tkvdb_params_create();

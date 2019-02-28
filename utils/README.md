@@ -2,7 +2,7 @@
 
 ## tkvdb-dump
 
-Dump contents of database into file. File is set of "key":"value" pairs,  one line per pair. Some characters ('\n', '\"', '\\', '\e') are escaped.
+Dump contents of database into file. File is set of "key":"value" pairs,  one line per pair. Some characters ('\n', '\"', '\\') are escaped.
 
 ### Compiling and using:
 
