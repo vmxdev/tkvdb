@@ -45,6 +45,9 @@ print_sym(FILE *out, int sym)
 	} else if (sym == 0x1b) {
 		/* \e */
 		fputs("\\e", out);
+	} else if (sym == 0x00) {
+		/* \0 */
+		fputs("\\0", out);
 	} else {
 		fputc(sym, out);
 	}
@@ -138,7 +141,7 @@ main(int argc, char *argv[])
 	db_file = argv[optind];
 
 	if (outfile) {
-		out = fopen(outfile, "w");
+		out = fopen(outfile, "wb");
 		if (!out) {
 			fprintf(stderr, "Can't open output file '%s': %s",
 				outfile, strerror(errno));

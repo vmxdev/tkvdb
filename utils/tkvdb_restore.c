@@ -160,6 +160,8 @@ again:
 					SYM_APPEND(in, '\n');
 				} else if (c == 'e') {
 					SYM_APPEND(in, 0x1b);
+				} else if (c == '0') {
+					SYM_APPEND(in, 0x00);
 				}
 			} else {
 				/* append symbol */
@@ -314,7 +316,7 @@ main(int argc, char *argv[])
 	db_file = argv[optind];
 
 	if (infile) {
-		in.f = fopen(infile, "r");
+		in.f = fopen(infile, "rb");
 		if (!in.f) {
 			fprintf(stderr, "Can't open input file '%s': %s",
 				infile, strerror(errno));
