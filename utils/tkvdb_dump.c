@@ -45,9 +45,6 @@ print_sym(FILE *out, int sym)
 	} else if (sym == 0x1b) {
 		/* \e */
 		fputs("\\e", out);
-	} else if (sym == 0x00) {
-		/* \0 */
-		fputs("\\0", out);
 	} else {
 		fputc(sym, out);
 	}

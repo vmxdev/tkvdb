@@ -160,8 +160,6 @@ again:
 					SYM_APPEND(in, '\n');
 				} else if (c == 'e') {
 					SYM_APPEND(in, 0x1b);
-				} else if (c == '0') {
-					SYM_APPEND(in, 0x00);
 				}
 			} else {
 				/* append symbol */
@@ -202,7 +200,6 @@ add_pair(struct input *in, tkvdb_tr *tr)
 		return 0;
 	}
 
-	key = in->strtoken;
 	keysize = in->toksize;
 
 	token = scan_input(in);
@@ -219,6 +216,7 @@ add_pair(struct input *in, tkvdb_tr *tr)
 		return 0;
 	}
 
+	key = in->strtoken;
 	val = in->strtoken + keysize;
 	valsize = in->toksize - keysize;
 
