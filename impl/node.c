@@ -191,7 +191,6 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 	uint64_t off, TKVDB_MEMNODE_TYPE **node_ptr)
 {
 	uint8_t buf[TKVDB_READ_SIZE];
-	ssize_t read_res;
 	struct tkvdb_disknode *disknode;
 	size_t prefix_val_meta_size;
 	uint8_t *ptr;
@@ -219,18 +218,10 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 		return TKVDB_IO_ERROR;
 	}
 
-	read_res = read(fd, buf, TKVDB_READ_SIZE);
-	if (read_res < 0) {
+	if (!tkvdb_try_read_file(fd, buf, TKVDB_READ_SIZE, 1)) {
 		return TKVDB_IO_ERROR;
 	}
-
 	disknode = (struct tkvdb_disknode *)buf;
-
-	if (((uint32_t)read_res < disknode->size)
-		&& (disknode->size < TKVDB_READ_SIZE)) {
-
-		return TKVDB_IO_ERROR;
-	}
 
 	/* calculate size of prefix + value + metadata */
 	prefix_val_meta_size = disknode->size - sizeof(struct tkvdb_disknode)
@@ -340,8 +331,12 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 				blk_tail - pfx_size);
 			/* read rest of value + metadata */
 			val_meta_ptr += blk_tail - pfx_size;
-			read(fd, val_meta_ptr,
-				 disknode->size - TKVDB_READ_SIZE);
+
+			if (!tkvdb_try_read_file(fd, val_meta_ptr,
+				disknode->size - TKVDB_READ_SIZE, 0)) {
+
+				return TKVDB_IO_ERROR;
+			}
 		} else {
 			/* copy start of prefix */
 			memcpy(prefix_val_meta, ptr, blk_tail);
@@ -354,17 +349,20 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 			(*node_ptr)->c.val_pad = VALPADDING((*node_ptr));
 			val_meta_ptr = prefix_val_meta + pfx_size
 				+ (*node_ptr)->c.val_pad;
-			read(fd, val_meta_ptr,
-				prefix_val_meta_size - pfx_size);
+
+			if (!tkvdb_try_read_file(fd, val_meta_ptr,
+				prefix_val_meta_size - pfx_size, 0)) {
+
+				return TKVDB_IO_ERROR;
+			}
 		}
 #else
-/*
-		size_t blk_tail = TKVDB_READ_SIZE
-			- (disknode->size - prefix_val_meta_size);
-*/
 		memcpy(prefix_val_meta, ptr, blk_tail);
-		read(fd, prefix_val_meta + blk_tail,
-			disknode->size - TKVDB_READ_SIZE);
+		if (!tkvdb_try_read_file(fd, prefix_val_meta + blk_tail,
+			disknode->size - TKVDB_READ_SIZE, 0)) {
+
+			return TKVDB_IO_ERROR;
+		}
 #endif
 	} else {
 #ifdef TKVDB_PARAMS_ALIGN_VAL

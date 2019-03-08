@@ -379,7 +379,9 @@ TKVDB_IMPL_DO_COMMIT(tkvdb_tr *trns, struct tkvdb_db_info *vacdbinfo)
 			&(tr->db->write_buf[wsize - TKVDB_TR_FTRSIZE]);
 
 		*footer_ptr = tr->db->info.footer;
-		if (write(tr->db->fd, tr->db->write_buf, wsize) != wsize) {
+		if (!tkvdb_try_write_file(tr->db->fd, tr->db->write_buf,
+			wsize)) {
+
 			return TKVDB_IO_ERROR;
 		}
 	} else {
@@ -389,7 +391,9 @@ TKVDB_IMPL_DO_COMMIT(tkvdb_tr *trns, struct tkvdb_db_info *vacdbinfo)
 		tr->db->info.footer.gap_begin += wsize;
 
 		header_ptr->footer_off = tr->db->info.filesize;
-		if (write(tr->db->fd, tr->db->write_buf, wsize) != wsize) {
+		if (!tkvdb_try_write_file(tr->db->fd, tr->db->write_buf,
+			wsize)) {
+
 			return TKVDB_IO_ERROR;
 		}
 		/* seek to end of file */
@@ -400,7 +404,9 @@ TKVDB_IMPL_DO_COMMIT(tkvdb_tr *trns, struct tkvdb_db_info *vacdbinfo)
 		}
 		/* write footer */
 		wsize = sizeof(struct tkvdb_tr_footer);
-		if (write(tr->db->fd, &tr->db->info.footer, wsize) != wsize) {
+		if (!tkvdb_try_write_file(tr->db->fd, &tr->db->info.footer,
+			wsize)) {
+
 			return TKVDB_IO_ERROR;
 		}
 	}

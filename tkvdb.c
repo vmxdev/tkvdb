@@ -257,6 +257,56 @@ tkvdb_info_read(const int fd, struct tkvdb_db_info *info)
 	return TKVDB_OK;
 }
 
+/* handle partial reads and writes */
+static int
+tkvdb_try_read_file(int fd, void *buf, size_t size, int ignore_eof)
+{
+	size_t bytes_read = 0;
+	uint8_t *bbuf = buf;
+	for (;;) {
+		ssize_t read_res;
+		read_res = read(fd, bbuf, size - bytes_read);
+		if (read_res < 0) {
+			return 0;
+		} else if (read_res == 0) {
+			/* EOF */
+			if (ignore_eof) {
+				break;
+			}
+			if (bytes_read < size) {
+				return 0;
+			}
+		}
+		bytes_read += read_res;
+		if (bytes_read >= size) {
+			break;
+		}
+		bbuf += bytes_read;
+	}
+	return 1;
+}
+
+static int
+tkvdb_try_write_file(int fd, void *buf, size_t size)
+{
+	size_t bytes_write = 0;
+	uint8_t *bbuf = buf;
+	for (;;) {
+		ssize_t write_res;
+		write_res = write(fd, bbuf, size - bytes_write);
+		if (write_res < 0) {
+			return 0;
+		}
+		bytes_write += write_res;
+		if (bytes_write >= size) {
+			break;
+		}
+		bbuf += bytes_write;
+	}
+	return 1;
+}
+
+
 /* fill tkvdb_params with default values */
 void
 tkvdb_params_init(tkvdb_params *params)
