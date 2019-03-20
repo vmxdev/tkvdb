@@ -51,6 +51,12 @@ typedef enum TKVDB_PARAM
 	/* cursors stacks size limit, default SIZE_MAX */
 	TKVDB_PARAM_CURSOR_STACK_LIMIT,
 
+	/* dynamically allocate space for cursor key, default 1 */
+	TKVDB_PARAM_CURSOR_KEY_DYNALLOC,
+
+	/* cursor key size limit, default SIZE_MAX */
+	TKVDB_PARAM_CURSOR_KEY_LIMIT,
+
 	/* flags passed to open() function */
 	TKVDB_PARAM_DBFILE_OPEN_FLAGS
 } TKVDB_PARAM;

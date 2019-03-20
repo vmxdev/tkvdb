@@ -90,6 +90,9 @@ struct tkvdb_params
 
 	size_t stack_limit;    /* cursors stack size limit */
 	int stack_dynalloc;    /* dynamically allocate cursors stack */
+
+	size_t key_limit;      /* cursor key size limit */
+	int key_dynalloc;      /* dynamically allocate cursor key */
 };
 
 /* packed structures */
@@ -197,8 +200,12 @@ typedef struct tkvdb_cursor_data
 	size_t stack_limit;
 	int stack_dynalloc;
 
+	size_t key_limit;
+	int key_dynalloc;
+	size_t key_allocated;
+
 	size_t prefix_size;
-	unsigned char *prefix;
+	uint8_t *prefix;
 
 	size_t val_size;
 	uint8_t *val;
@@ -319,6 +326,9 @@ tkvdb_params_init(tkvdb_params *params)
 
 	params->stack_dynalloc = 1;
 	params->stack_limit = SIZE_MAX / sizeof(struct tkvdb_visit_helper);
+
+	params->key_dynalloc = 1;
+	params->key_limit = SIZE_MAX;
 
 	params->mode = S_IRUSR | S_IWUSR;
 #ifndef _WIN32
@@ -441,6 +451,7 @@ tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val)
 		case TKVDB_PARAM_AUTOBEGIN:
 			params->autobegin = (int)val;
 			break;
+
 		case TKVDB_PARAM_CURSOR_STACK_DYNALLOC:
 			params->stack_dynalloc = (int)val;
 			break;
@@ -449,6 +460,14 @@ tkvdb_param_set(tkvdb_params *params, TKVDB_PARAM p, int64_t val)
 			params->stack_limit = (size_t)val
 				/ sizeof(struct tkvdb_visit_helper);
 			break;
+
+		case TKVDB_PARAM_CURSOR_KEY_DYNALLOC:
+			params->key_dynalloc = (int)val;
+			break;
+		case TKVDB_PARAM_CURSOR_KEY_LIMIT:
+			params->key_limit = (size_t)val;
+			break;
+
 		case TKVDB_PARAM_DBFILE_OPEN_FLAGS:
 			params->flags = val;
 			break;
@@ -468,6 +487,7 @@ tkvdb_cursor_free(tkvdb_cursor *c)
 
 	free(cdata->prefix);
 	cdata->prefix_size = 0;
+	cdata->key_allocated = 0;
 
 	cdata->val_size = 0;
 	cdata->val = NULL;
@@ -511,34 +531,37 @@ tkvdb_cursor_valsize(tkvdb_cursor *c)
 	return cdata->val_size;
 }
 
-/* todo: rewrite */
 static int
-tkvdb_cursor_expand_prefix(tkvdb_cursor *c, int n)
+tkvdb_cursor_resize_prefix(tkvdb_cursor *c, size_t n, int grow)
 {
-	unsigned char *tmp_pfx;
 	tkvdb_cursor_data *cdata = c->data;
 
 	if (n == 0) {
-		/* underflow */
-		free(cdata->prefix);
-		cdata->prefix = NULL;
+		/* underflow? */
 		return TKVDB_OK;
 	}
 
-	/* empty key is ok */
-	if ((cdata->prefix_size + n) == 0) {
-		free(cdata->prefix);
-		cdata->prefix = NULL;
+	if (!grow) {
+		/* don't need to reallocate */
 		return TKVDB_OK;
 	}
 
-	tmp_pfx = realloc(cdata->prefix, cdata->prefix_size + n);
-	if (!tmp_pfx) {
-		free(cdata->prefix);
-		cdata->prefix = NULL;
-		return TKVDB_ENOMEM;
+	if ((cdata->prefix_size + n) > cdata->key_allocated) {
+		unsigned char *tmp_pfx;
+
+		/* need more memory */
+		if (!cdata->key_dynalloc) {
+			/* and no dynamic reallocation allowed */
+			return TKVDB_ENOMEM;
+		}
+
+		tmp_pfx = realloc(cdata->prefix, cdata->prefix_size + n);
+		if (!tmp_pfx) {
+			return TKVDB_ENOMEM;
+		}
+		cdata->prefix = tmp_pfx;
+		cdata->key_allocated = cdata->prefix_size + n;
 	}
-	cdata->prefix = tmp_pfx;
 
 	return TKVDB_OK;
 }
@@ -549,10 +572,6 @@ tkvdb_cursor_reset(tkvdb_cursor *c)
 	tkvdb_cursor_data *cdata = c->data;
 
 	cdata->stack_size = 0;
-	if (cdata->prefix_size > 0) {
-		free(cdata->prefix);
-		cdata->prefix = NULL;
-	}
 	cdata->prefix_size = 0;
 
 	cdata->val_size = 0;
@@ -805,8 +824,24 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 		cdata->stack_allocated = 0;
 	}
 
-	cdata->prefix_size = 0;
-	cdata->prefix = NULL;
+	cdata->key_limit = trdata->params.key_limit;
+	cdata->key_dynalloc = trdata->params.key_dynalloc;
+
+	if (!cdata->key_dynalloc) {
+		/* allocate space for keys */
+		cdata->prefix = malloc(cdata->key_limit);
+
+		if (!cdata->prefix) {
+			goto fail_key;
+		}
+		cdata->key_allocated = cdata->key_limit;
+	} else {
+		cdata->key_allocated = 0;
+
+		cdata->prefix_size = 0;
+		cdata->prefix = NULL;
+	}
+
 
 	cdata->val_size = 0;
 	cdata->val = NULL;
@@ -859,6 +894,8 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 
 	return c;
 
+fail_key:
+	free(cdata->stack);
 fail_stack:
 	free(cdata);
 
