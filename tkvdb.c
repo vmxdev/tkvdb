@@ -214,6 +214,14 @@ typedef struct tkvdb_cursor_data
 } tkvdb_cursor_data;
 
 
+/* triggers set */
+struct tkvdb_triggers
+{
+	size_t n;
+	tkvdb_trigger_func *funcs;
+};
+
+
 static TKVDB_RES
 tkvdb_info_read(const int fd, struct tkvdb_db_info *info)
 {
@@ -905,5 +913,52 @@ fail_datalloc:
 fail_calloc:
 
 	return NULL;
+}
+
+/* triggers */
+tkvdb_triggers *
+tkvdb_triggers_create(void)
+{
+	tkvdb_triggers *triggers;
+
+	triggers = malloc(sizeof(tkvdb_triggers));
+	if (!triggers) {
+		return NULL;
+	}
+
+	triggers->n = 0;
+	triggers->funcs = NULL;
+
+	return triggers;
+}
+
+int
+tkvdb_triggers_add(tkvdb_triggers *triggers, tkvdb_trigger_func func)
+{
+	tkvdb_trigger_func *funcs;
+
+	funcs = realloc(triggers->funcs,
+		(triggers->n + 1) * sizeof(tkvdb_trigger_func));
+
+	if (!funcs) {
+		return 0;
+	}
+
+	triggers->funcs = funcs;
+	triggers->funcs[triggers->n] = func;
+	triggers->n++;
+
+	return 1;
+}
+
+void
+tkvdb_triggers_free(tkvdb_triggers *triggers)
+{
+	if (triggers && (triggers->n != 0)) {
+		free(triggers->funcs);
+		triggers->funcs = NULL;
+		triggers->n = 0;
+	}
+	free(triggers);
 }
 

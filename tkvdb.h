@@ -7,6 +7,7 @@
 
 typedef struct tkvdb tkvdb;
 typedef struct tkvdb_params tkvdb_params;
+typedef struct tkvdb_triggers tkvdb_triggers;
 
 typedef enum TKVDB_RES
 {
@@ -87,6 +88,9 @@ struct tkvdb_tr
 	void (*free)(tkvdb_tr *tr);
 
 	void *data;
+
+	TKVDB_RES (*putx)(tkvdb_tr *tr, const tkvdb_triggers *triggers,
+		const tkvdb_datum *key, const tkvdb_datum *val);
 };
 
 typedef struct tkvdb_cursor tkvdb_cursor;
@@ -110,6 +114,9 @@ struct tkvdb_cursor
 
 	void *data;
 };
+
+typedef TKVDB_RES (*tkvdb_trigger_func)(tkvdb_tr *tr,
+	const tkvdb_datum *key, const tkvdb_datum *val);
 
 #ifdef __cplusplus
 extern "C" {
@@ -140,6 +147,12 @@ TKVDB_RES tkvdb_vacuum(tkvdb_tr *tr, tkvdb_tr *vac, tkvdb_tr *tres,
 /* get database file information */
 TKVDB_RES tkvdb_dbinfo(tkvdb *db, uint64_t *root_off,
 	uint64_t *gap_begin, uint64_t *gap_end);
+
+
+/* triggers */
+tkvdb_triggers *tkvdb_triggers_create(void);
+int tkvdb_triggers_add(tkvdb_triggers *triggers, tkvdb_trigger_func func);
+void tkvdb_triggers_free(tkvdb_triggers *triggers);
 
 #ifdef __cplusplus
 }
