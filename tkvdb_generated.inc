@@ -41,6 +41,16 @@
 #include "impl/cursor.c"
 #include "impl/tr.c"
 #include "impl/del.c"
+
+#define TKVDB_TRIGGER
+#undef TKVDB_IMPL_PUT
+#define TKVDB_IMPL_PUT tkvdb_put_alignvalx
+#include "impl/put.c"
+#undef TKVDB_IMPL_GET
+#define TKVDB_IMPL_GET tkvdb_get_alignvalx
+#include "impl/get.c"
+#undef TKVDB_TRIGGER
+
 #undef TKVDB_IMPL_PUT
 #undef TKVDB_IMPL_GET
 #undef TKVDB_IMPL_CURSOR_PUSH
@@ -120,6 +130,16 @@
 #include "impl/cursor.c"
 #include "impl/tr.c"
 #include "impl/del.c"
+
+#define TKVDB_TRIGGER
+#undef TKVDB_IMPL_PUT
+#define TKVDB_IMPL_PUT tkvdb_put_genericx
+#include "impl/put.c"
+#undef TKVDB_IMPL_GET
+#define TKVDB_IMPL_GET tkvdb_get_genericx
+#include "impl/get.c"
+#undef TKVDB_TRIGGER
+
 #undef TKVDB_IMPL_PUT
 #undef TKVDB_IMPL_GET
 #undef TKVDB_IMPL_CURSOR_PUSH
@@ -202,6 +222,16 @@
 #include "impl/cursor.c"
 #include "impl/tr.c"
 #include "impl/del.c"
+
+#define TKVDB_TRIGGER
+#undef TKVDB_IMPL_PUT
+#define TKVDB_IMPL_PUT tkvdb_put_alignval_nodbx
+#include "impl/put.c"
+#undef TKVDB_IMPL_GET
+#define TKVDB_IMPL_GET tkvdb_get_alignval_nodbx
+#include "impl/get.c"
+#undef TKVDB_TRIGGER
+
 #undef TKVDB_IMPL_PUT
 #undef TKVDB_IMPL_GET
 #undef TKVDB_IMPL_CURSOR_PUSH
@@ -287,6 +317,16 @@
 #include "impl/cursor.c"
 #include "impl/tr.c"
 #include "impl/del.c"
+
+#define TKVDB_TRIGGER
+#undef TKVDB_IMPL_PUT
+#define TKVDB_IMPL_PUT tkvdb_put_generic_nodbx
+#include "impl/put.c"
+#undef TKVDB_IMPL_GET
+#define TKVDB_IMPL_GET tkvdb_get_generic_nodbx
+#include "impl/get.c"
+#undef TKVDB_TRIGGER
+
 #undef TKVDB_IMPL_PUT
 #undef TKVDB_IMPL_GET
 #undef TKVDB_IMPL_CURSOR_PUSH

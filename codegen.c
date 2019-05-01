@@ -54,6 +54,13 @@ static const char *funcs[] = {
 	NULL
 };
 
+/* functions with triggers */
+static const char *trigfuncs[] = {
+	"put",
+	"get",
+	NULL
+};
+
 static const char *incs[] = {
 	"impl/memnode.h",
 	"impl/node.c",
@@ -110,6 +117,23 @@ print_block(const char *name, int dbfile)
 		printf("#include \"%s\"\n", incs[i]);
 	}
 
+	/* triggers */
+	printf("\n");
+	printf("#define TKVDB_TRIGGER\n");
+
+	for (i=0; trigfuncs[i]; i++) {
+		func = trigfuncs[i];
+		func_upper = str2upper(func);
+		printf("#undef TKVDB_IMPL_%s\n", func_upper);
+		printf("#define TKVDB_IMPL_%s tkvdb_%s_%s%sx\n",
+			func_upper, func, name, dbfile ? "": "_nodb");
+		printf("#include \"impl/%s.c\"\n", func);
+		free(func_upper);
+	}
+	printf("#undef TKVDB_TRIGGER\n");
+
+	/* undefine all */
+	printf("\n");
 	for (i=0; funcs[i]; i++) {
 		func = funcs[i];
 		func_upper = str2upper(func);

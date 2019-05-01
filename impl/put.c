@@ -16,9 +16,27 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifdef TKVDB_TRIGGER
+#define TKVDB_FIRE_TRIGGERS(T, TYPE)                                        \
+do {                                                                        \
+	size_t trg_idx;                                                     \
+	for (trg_idx=0; trg_idx<T->n_ ## TYPE; trg_idx++) {                 \
+		(*T->funcs_ ## TYPE[trg_idx])(trns, key, val, T->userdata); \
+	}                                                                   \
+} while (0)
+#else
+#define TKVDB_FIRE_TRIGGERS(T, TYPE)
+#endif
+
+
 /* add key-value pair to memory transaction */
 static TKVDB_RES
+#ifdef TKVDB_TRIGGER
+TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val,
+	const tkvdb_triggers *triggers)
+#else
 TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
+#endif
 {
 	const unsigned char *sym;  /* pointer to current symbol in key */
 	TKVDB_MEMNODE_TYPE *node;  /* current node */
@@ -31,6 +49,10 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 	uint8_t *prefix_val_meta;
 
 	tkvdb_tr_data *tr = trns->data;
+
+#ifdef TKVDB_TRIGGER
+	(void)triggers;
+#endif
 
 #ifdef TKVDB_PARAMS_ALIGN_VAL
 #define VAL_ALIGN_PAD (node->c.val_pad)
@@ -99,6 +121,7 @@ next_byte:
 				&& (val->size != 0)) {
 				/* same value size, so copy new value and
 					return */
+				TKVDB_FIRE_TRIGGERS(triggers, before_update);
 				memcpy(prefix_val_meta
 					+ node->c.prefix_size
 					+ VAL_ALIGN_PAD,
@@ -113,6 +136,8 @@ next_byte:
 			if (!newroot) return TKVDB_ENOMEM;
 
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
+
+			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
 
 			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 				rnodes_chain, node, newroot);
@@ -149,6 +174,8 @@ next_byte:
 
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
 		newroot->c.nsubnodes += 1;
+
+		TKVDB_FIRE_TRIGGERS(triggers, before_insert);
 
 		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 			rnodes_chain, node, newroot);
@@ -195,6 +222,8 @@ next_byte:
 			newroot->c.nsubnodes += 1;
 			newroot->next[*sym] = subnode_rest;
 
+			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+
 			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 				rnodes_chain, node, newroot);
 
@@ -231,6 +260,8 @@ next_byte:
 				sym + 1,
 				val->size, val->data);
 			if (!tmp) return TKVDB_ENOMEM;
+
+			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
 
 			node->next[*sym] = tmp;
 			node->c.nsubnodes += 1; /* XXX: not atomic */
@@ -288,6 +319,8 @@ next_byte:
 		newroot->next[*sym] = subnode_key;
 		newroot->c.nsubnodes += 2;
 
+		TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+
 		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 			rnodes_chain, node, newroot);
 
@@ -302,3 +335,4 @@ next_byte:
 #undef VAL_ALIGN_PAD
 }
 
+#undef TKVDB_FIRE_TRIGGERS

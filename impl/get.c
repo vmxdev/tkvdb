@@ -16,7 +16,12 @@
 
 /* get value for given key */
 static TKVDB_RES
+#ifdef TKVDB_TRIGGER
+TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val,
+	const tkvdb_triggers *triggers)
+#else
 TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
+#endif
 {
 	const unsigned char *sym;
 	unsigned char *prefix_val_meta;
@@ -27,6 +32,10 @@ TKVDB_IMPL_GET(tkvdb_tr *trns, const tkvdb_datum *key, tkvdb_datum *val)
 	if (!tr->started) {
 		return TKVDB_NOT_STARTED;
 	}
+
+#ifdef TKVDB_TRIGGER
+	(void)triggers;
+#endif
 
 	/* check root */
 	if (tr->root == NULL) {

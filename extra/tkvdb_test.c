@@ -631,6 +631,84 @@ test_ram_mem(void)
 	TEST_CHECK(memram < memdb);
 }
 
+/* basic triggers test */
+struct basic_trigger_data
+{
+	size_t inserts;
+	size_t updates;
+};
+
+static TKVDB_RES
+basic_trigger_update(tkvdb_tr *tr,
+	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata)
+{
+	(void)tr;
+	(void)key;
+	(void)val;
+
+	struct basic_trigger_data *data = userdata;
+
+	data->updates++;
+
+	return TKVDB_OK;
+}
+
+static TKVDB_RES
+basic_trigger_insert(tkvdb_tr *tr,
+	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata)
+{
+	(void)tr;
+	(void)key;
+	(void)val;
+
+	struct basic_trigger_data *data = userdata;
+
+	data->inserts++;
+
+	return TKVDB_OK;
+}
+
+void
+test_triggers_basic(void)
+{
+	tkvdb_tr *tr;
+	int i, r;
+	char strkey[20];
+	tkvdb_triggers *trg;
+	struct basic_trigger_data userdata;
+
+	userdata.inserts = userdata.updates = 0;
+
+	tr = tkvdb_tr_create(NULL, NULL);
+	TEST_CHECK(tr != NULL);
+
+	trg = tkvdb_triggers_create(&userdata);
+	TEST_CHECK(trg != NULL);
+
+	r = tkvdb_triggers_add_before_update(trg, &basic_trigger_update);
+	TEST_CHECK(r != 0);
+	r = tkvdb_triggers_add_before_insert(trg, &basic_trigger_insert);
+	TEST_CHECK(r != 0);
+
+	TEST_CHECK(tr->begin(tr) == TKVDB_OK);
+	for (i=0; i<N; i++) {
+		tkvdb_datum key, val;
+
+		/* 1 insert and 2 updates for each key */
+		snprintf(strkey, sizeof(strkey), "%d", i / 3);
+		key.data = strkey;
+		key.size = strlen(strkey);
+		val.data = &i;
+		val.size = sizeof(int);
+		TEST_CHECK(tr->putx(tr, &key, &val, trg) == TKVDB_OK);
+	}
+	TEST_CHECK(tr->rollback(tr) == TKVDB_OK);
+	tr->free(tr);
+	tkvdb_triggers_free(trg);
+
+	TEST_CHECK(userdata.inserts + userdata.updates + 1 == N);
+}
+
 #if 0
 void
 test_vacuum(void)
@@ -704,6 +782,7 @@ TEST_LIST = {
 	{ "db traversal aligned", test_dbtrav_aligned },
 	{ "delete", test_del },
 	{ "ram-only memory usage", test_ram_mem },
+	{ "triggers basic", test_triggers_basic },
 	/*{ "vacuum", test_vacuum },*/
 	{ 0 }
 };

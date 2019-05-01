@@ -73,6 +73,20 @@ do {                                                                   \
 	}                                                              \
 } while (0)
 
+/* add trigger to corresponding set */
+#define TKVDB_TRIGGERS_ADD(T, F, TYPE)                                 \
+do {                                                                   \
+	tkvdb_trigger_func *funcs;                                     \
+	funcs = realloc(T->funcs_ ## TYPE,                             \
+		(T->n_ ## TYPE + 1) * sizeof(tkvdb_trigger_func));     \
+	if (!funcs) {                                                  \
+		return 0;                                              \
+	}                                                              \
+	T->funcs_ ## TYPE = funcs;                                     \
+	T->funcs_ ## TYPE[T->n_ ## TYPE] = F;                          \
+	T->n_ ## TYPE ++;                                              \
+} while (0)
+
 struct tkvdb_params
 {
 	int flags;              /* db file flags (as passed to open()) */
@@ -217,8 +231,13 @@ typedef struct tkvdb_cursor_data
 /* triggers set */
 struct tkvdb_triggers
 {
-	size_t n;
-	tkvdb_trigger_func *funcs;
+	void *userdata;
+
+	size_t n_before_insert;
+	tkvdb_trigger_func *funcs_before_insert;
+
+	size_t n_before_update;
+	tkvdb_trigger_func *funcs_before_update;
 };
 
 
@@ -748,6 +767,9 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->del = &tkvdb_del_alignval;
 
 			tr->free = &tkvdb_tr_free_alignval;
+
+			tr->putx = &tkvdb_put_alignvalx;
+			tr->getx = &tkvdb_get_alignvalx;
 		} else {
 			/* RAM-only */
 			tr->commit = &tkvdb_commit_alignval_nodb;
@@ -758,6 +780,9 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->del = &tkvdb_del_alignval_nodb;
 
 			tr->free = &tkvdb_tr_free_alignval_nodb;
+
+			tr->putx = &tkvdb_put_alignval_nodbx;
+			tr->getx = &tkvdb_get_alignval_nodbx;
 		}
 	} else {
 		if (db) {
@@ -769,6 +794,9 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->del = &tkvdb_del_generic;
 
 			tr->free = &tkvdb_tr_free_generic;
+
+			tr->putx = &tkvdb_put_genericx;
+			tr->getx = &tkvdb_get_genericx;
 		} else {
 			tr->commit = &tkvdb_commit_generic_nodb;
 			tr->rollback = &tkvdb_rollback_generic_nodb;
@@ -778,6 +806,9 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->del = &tkvdb_del_generic_nodb;
 
 			tr->free = &tkvdb_tr_free_generic_nodb;
+
+			tr->putx = &tkvdb_put_generic_nodbx;
+			tr->getx = &tkvdb_get_generic_nodbx;
 		}
 	}
 
@@ -917,7 +948,7 @@ fail_calloc:
 
 /* triggers */
 tkvdb_triggers *
-tkvdb_triggers_create(void)
+tkvdb_triggers_create(void *userdata)
 {
 	tkvdb_triggers *triggers;
 
@@ -926,38 +957,44 @@ tkvdb_triggers_create(void)
 		return NULL;
 	}
 
-	triggers->n = 0;
-	triggers->funcs = NULL;
+	triggers->userdata = userdata;
+
+	triggers->n_before_insert = 0;
+	triggers->funcs_before_insert = NULL;
+
+	triggers->n_before_update = 0;
+	triggers->funcs_before_update = NULL;
 
 	return triggers;
 }
 
 int
-tkvdb_triggers_add(tkvdb_triggers *triggers, tkvdb_trigger_func func)
+tkvdb_triggers_add_before_insert(tkvdb_triggers *triggers,
+	tkvdb_trigger_func func)
 {
-	tkvdb_trigger_func *funcs;
+	TKVDB_TRIGGERS_ADD(triggers, func, before_insert);
+	return 1;
+}
 
-	funcs = realloc(triggers->funcs,
-		(triggers->n + 1) * sizeof(tkvdb_trigger_func));
-
-	if (!funcs) {
-		return 0;
-	}
-
-	triggers->funcs = funcs;
-	triggers->funcs[triggers->n] = func;
-	triggers->n++;
-
+int
+tkvdb_triggers_add_before_update(tkvdb_triggers *triggers,
+	tkvdb_trigger_func func)
+{
+	TKVDB_TRIGGERS_ADD(triggers, func, before_update);
 	return 1;
 }
 
 void
 tkvdb_triggers_free(tkvdb_triggers *triggers)
 {
-	if (triggers && (triggers->n != 0)) {
-		free(triggers->funcs);
-		triggers->funcs = NULL;
-		triggers->n = 0;
+	if (triggers) {
+		free(triggers->funcs_before_insert);
+		triggers->funcs_before_insert = NULL;
+		triggers->n_before_insert = 0;
+
+		free(triggers->funcs_before_update);
+		triggers->funcs_before_update = NULL;
+		triggers->n_before_update = 0;
 	}
 	free(triggers);
 }
