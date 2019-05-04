@@ -676,6 +676,7 @@ test_triggers_basic(void)
 	char strkey[20];
 	tkvdb_triggers *trg;
 	struct basic_trigger_data userdata;
+	tkvdb_trigger_set trigger_set;
 
 	userdata.inserts = userdata.updates = 0;
 
@@ -685,9 +686,10 @@ test_triggers_basic(void)
 	trg = tkvdb_triggers_create(&userdata);
 	TEST_CHECK(trg != NULL);
 
-	r = tkvdb_triggers_add_before_update(trg, &basic_trigger_update);
-	TEST_CHECK(r != 0);
-	r = tkvdb_triggers_add_before_insert(trg, &basic_trigger_insert);
+	trigger_set.before_update = basic_trigger_update;
+	trigger_set.before_insert = basic_trigger_insert;
+
+	r = tkvdb_triggers_add_set(trg, &trigger_set);
 	TEST_CHECK(r != 0);
 
 	TEST_CHECK(tr->begin(tr) == TKVDB_OK);

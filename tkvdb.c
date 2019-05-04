@@ -969,18 +969,13 @@ tkvdb_triggers_create(void *userdata)
 }
 
 int
-tkvdb_triggers_add_before_insert(tkvdb_triggers *triggers,
-	tkvdb_trigger_func func)
+tkvdb_triggers_add_set(tkvdb_triggers *triggers,
+	const tkvdb_trigger_set *trigger_set)
 {
-	TKVDB_TRIGGERS_ADD(triggers, func, before_insert);
-	return 1;
-}
-
-int
-tkvdb_triggers_add_before_update(tkvdb_triggers *triggers,
-	tkvdb_trigger_func func)
-{
-	TKVDB_TRIGGERS_ADD(triggers, func, before_update);
+	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_insert,
+		before_insert);
+	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_update,
+		before_update);
 	return 1;
 }
 

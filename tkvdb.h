@@ -119,9 +119,16 @@ struct tkvdb_cursor
 	void *data;
 };
 
-/* trigger function */
+/* triggers */
 typedef TKVDB_RES (*tkvdb_trigger_func)(tkvdb_tr *tr,
 	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata);
+
+typedef struct tkvdb_trigger_set
+{
+	tkvdb_trigger_func before_insert;
+	tkvdb_trigger_func before_update;
+} tkvdb_trigger_set;
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -156,11 +163,10 @@ TKVDB_RES tkvdb_dbinfo(tkvdb *db, uint64_t *root_off,
 
 /* triggers */
 tkvdb_triggers *tkvdb_triggers_create(void *userdata);
-int tkvdb_triggers_add_before_insert(tkvdb_triggers *triggers,
-	tkvdb_trigger_func func);
-int tkvdb_triggers_add_before_update(tkvdb_triggers *triggers,
-	tkvdb_trigger_func func);
 void tkvdb_triggers_free(tkvdb_triggers *triggers);
+
+int tkvdb_triggers_add_set(tkvdb_triggers *triggers,
+	const tkvdb_trigger_set *trigger_set);
 
 #ifdef __cplusplus
 }
