@@ -66,21 +66,26 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 
 	/* new root */
 	if (tr->root == NULL) {
+		TKVDB_MEMNODE_TYPE *new_root;
 #ifndef TKVDB_PARAMS_NODBFILE
 		if (tr->db && (tr->db->info.filesize > 0)) {
 			/* we have underlying non-empty db file */
 			TKVDB_EXEC( TKVDB_IMPL_NODE_READ(trns,
-				tr->db->info.footer.root_off,
-				((TKVDB_MEMNODE_TYPE **)&(tr->root))) );
+				tr->db->info.footer.root_off, &new_root) );
+
+			TKVDB_FIRE_TRIGGERS(triggers, before_first);
+			tr->root = new_root;
 		} else 
 #endif
 		{
-			tr->root = TKVDB_IMPL_NODE_NEW(trns,
+			new_root = TKVDB_IMPL_NODE_NEW(trns,
 				TKVDB_NODE_VAL | TKVDB_NODE_LEAF,
 				key->size, key->data, val->size, val->data);
-			if (!tr->root) {
+			if (!new_root) {
 				return TKVDB_ENOMEM;
 			}
+			TKVDB_FIRE_TRIGGERS(triggers, before_first);
+			tr->root = new_root;
 			return TKVDB_OK;
 		}
 	}

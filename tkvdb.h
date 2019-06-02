@@ -127,6 +127,7 @@ typedef struct tkvdb_trigger_set
 {
 	tkvdb_trigger_func before_insert;
 	tkvdb_trigger_func before_update;
+	tkvdb_trigger_func before_first;
 } tkvdb_trigger_set;
 
 

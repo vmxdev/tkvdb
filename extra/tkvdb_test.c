@@ -639,6 +639,21 @@ struct basic_trigger_data
 };
 
 static TKVDB_RES
+basic_trigger_first(tkvdb_tr *tr,
+	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata)
+{
+	(void)tr;
+	(void)key;
+	(void)val;
+
+	struct basic_trigger_data *data = userdata;
+
+	data->inserts = 1;
+
+	return TKVDB_OK;
+}
+
+static TKVDB_RES
 basic_trigger_update(tkvdb_tr *tr,
 	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata)
 {
@@ -688,6 +703,7 @@ test_triggers_basic(void)
 
 	trigger_set.before_update = basic_trigger_update;
 	trigger_set.before_insert = basic_trigger_insert;
+	trigger_set.before_first = basic_trigger_first;
 
 	r = tkvdb_triggers_add_set(trg, &trigger_set);
 	TEST_CHECK(r != 0);
@@ -708,7 +724,7 @@ test_triggers_basic(void)
 	tr->free(tr);
 	tkvdb_triggers_free(trg);
 
-	TEST_CHECK(userdata.inserts + userdata.updates + 1 == N);
+	TEST_CHECK(userdata.inserts + userdata.updates == N);
 }
 
 #if 0

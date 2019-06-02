@@ -238,6 +238,9 @@ struct tkvdb_triggers
 
 	size_t n_before_update;
 	tkvdb_trigger_func *funcs_before_update;
+
+	size_t n_before_first;
+	tkvdb_trigger_func *funcs_before_first;
 };
 
 
@@ -965,6 +968,9 @@ tkvdb_triggers_create(void *userdata)
 	triggers->n_before_update = 0;
 	triggers->funcs_before_update = NULL;
 
+	triggers->n_before_first = 0;
+	triggers->funcs_before_first = NULL;
+
 	return triggers;
 }
 
@@ -976,6 +982,8 @@ tkvdb_triggers_add_set(tkvdb_triggers *triggers,
 		before_insert);
 	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_update,
 		before_update);
+	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_first,
+		before_first);
 	return 1;
 }
 
@@ -990,6 +998,10 @@ tkvdb_triggers_free(tkvdb_triggers *triggers)
 		free(triggers->funcs_before_update);
 		triggers->funcs_before_update = NULL;
 		triggers->n_before_update = 0;
+
+		free(triggers->funcs_before_first);
+		triggers->funcs_before_first = NULL;
+		triggers->n_before_first = 0;
 	}
 	free(triggers);
 }
