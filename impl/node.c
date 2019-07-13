@@ -70,7 +70,8 @@ TKVDB_IMPL_NODE_ALLOC(tkvdb_tr *trns, size_t node_size)
 /* create new node and append prefix and value */
 void *
 TKVDB_IMPL_NODE_NEW(tkvdb_tr *tr, int type, size_t prefix_size,
-	const void *prefix, size_t val_size, const void *val)
+	const void *prefix, size_t val_size, const void *val,
+	size_t meta_size, void **meta)
 {
 	TKVDB_MEMNODE_TYPE *node;
 	TKVDB_MEMNODE_TYPE_LEAF *node_leaf;
@@ -108,7 +109,7 @@ do {                                                                       \
 
 	if (type & TKVDB_NODE_LEAF) {
 		node_size = sizeof(TKVDB_MEMNODE_TYPE_LEAF)
-			+ prefix_size + val_size + NODE_ALIGN;
+			+ prefix_size + val_size + NODE_ALIGN + meta_size;
 		node_leaf = TKVDB_IMPL_NODE_ALLOC(tr, node_size);
 		if (!node_leaf) {
 			return NULL;
@@ -116,7 +117,7 @@ do {                                                                       \
 		node_common = &node_leaf->c;
 	} else {
 		node_size = sizeof(TKVDB_MEMNODE_TYPE)
-			+ prefix_size + val_size + NODE_ALIGN;
+			+ prefix_size + val_size + NODE_ALIGN + meta_size;
 		node = TKVDB_IMPL_NODE_ALLOC(tr, node_size);
 		if (!node) {
 			return NULL;
@@ -127,10 +128,11 @@ do {                                                                       \
 	node_common->type = type;
 	node_common->prefix_size = prefix_size;
 	node_common->val_size = val_size;
-	node_common->meta_size = 0;
+	node_common->meta_size = meta_size;
 	node_common->replaced_by = NULL;
 	node_common->disk_size = 0;
 	node_common->disk_off = 0;
+
 
 	node_common->nsubnodes = 0;
 
@@ -141,6 +143,10 @@ do {                                                                       \
 		}
 		if (val_size > 0) {
 			COPY_VAL(node_leaf);
+		}
+		if (meta) {
+			*meta = node_leaf->prefix_val_meta + prefix_size
+				+ val_size;
 		}
 		ret = node_leaf;
 	} else {
@@ -156,6 +162,10 @@ do {                                                                       \
 #ifndef TKVDB_PARAMS_NODBFILE
 		memset(node->fnext, 0, sizeof(uint64_t) * 256);
 #endif
+		if (meta) {
+			*meta = node->prefix_val_meta + prefix_size
+				+ val_size;
+		}
 		ret = node;
 	}
 
@@ -429,10 +439,6 @@ TKVDB_IMPL_NODE_FREE(tkvdb_tr_data *tr, TKVDB_MEMNODE_TYPE *node)
 				}
 				tr->stack[stack_size].node = node;
 				tr->stack[stack_size].off = off;
-/*
-				stack[stack_size].node = node;
-				stack[stack_size].off = off;
-*/
 				stack_size++;
 
 				node = next;

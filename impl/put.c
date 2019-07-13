@@ -24,8 +24,17 @@ do {                                                                        \
 		(*T->funcs_ ## TYPE[trg_idx])(trns, key, val, T->userdata); \
 	}                                                                   \
 } while (0)
+
+#define TKVDB_TRIGGER_NODE_PUSH(T, NODE, SIZE)                        \
+do {                                                                        \
+	T->stack[SIZE].val = NULL;                                     \
+	SIZE++;                                                             \
+} while (0)
+
 #else
+
 #define TKVDB_FIRE_TRIGGERS(T, TYPE)
+#define TKVDB_TRIGGER_NODE_PUSH(T, NODE, SIZE)
 #endif
 
 
@@ -33,7 +42,7 @@ do {                                                                        \
 static TKVDB_RES
 #ifdef TKVDB_TRIGGER
 TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val,
-	const tkvdb_triggers *triggers)
+	tkvdb_triggers *triggers)
 #else
 TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 #endif
@@ -52,6 +61,7 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 
 #ifdef TKVDB_TRIGGER
 	(void)triggers;
+	size_t stack_size = 0;
 #endif
 
 #ifdef TKVDB_PARAMS_ALIGN_VAL
@@ -73,18 +83,20 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 			TKVDB_EXEC( TKVDB_IMPL_NODE_READ(trns,
 				tr->db->info.footer.root_off, &new_root) );
 
-			TKVDB_FIRE_TRIGGERS(triggers, before_first);
 			tr->root = new_root;
 		} else 
 #endif
 		{
 			new_root = TKVDB_IMPL_NODE_NEW(trns,
 				TKVDB_NODE_VAL | TKVDB_NODE_LEAF,
-				key->size, key->data, val->size, val->data);
+				key->size, key->data, val->size, val->data,
+				0, NULL);
 			if (!new_root) {
 				return TKVDB_ENOMEM;
 			}
-			TKVDB_FIRE_TRIGGERS(triggers, before_first);
+
+			TKVDB_TRIGGER_NODE_PUSH(triggers, new_root, stack_size);
+			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
 			tr->root = new_root;
 			return TKVDB_OK;
 		}
@@ -137,7 +149,8 @@ next_byte:
 			newroot = TKVDB_IMPL_NODE_NEW(trns,
 				node->c.type | TKVDB_NODE_VAL,
 				pi, prefix_val_meta,
-				val->size, val->data);
+				val->size, val->data,
+				0, NULL);
 			if (!newroot) return TKVDB_ENOMEM;
 
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
@@ -160,7 +173,8 @@ next_byte:
 */
 		newroot = TKVDB_IMPL_NODE_NEW(trns, TKVDB_NODE_VAL, pi,
 			prefix_val_meta,
-			val->size, val->data);
+			val->size, val->data,
+			0, NULL);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
@@ -168,7 +182,8 @@ next_byte:
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size);
+			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size,
+			0, NULL);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);
@@ -208,7 +223,8 @@ next_byte:
 				node->c.val_size,
 				prefix_val_meta
 					+ VAL_ALIGN_PAD
-					+ node->c.prefix_size);
+					+ node->c.prefix_size,
+				0, NULL);
 			if (!newroot) {
 				if (tr->params.tr_buf_dynalloc) {
 					free(newroot);
@@ -221,7 +237,8 @@ next_byte:
 				key->size -
 					(sym - (unsigned char *)key->data) - 1,
 				sym + 1,
-				val->size, val->data);
+				val->size, val->data,
+				0, NULL);
 			if (!subnode_rest) return TKVDB_ENOMEM;
 
 			newroot->c.nsubnodes += 1;
@@ -263,7 +280,8 @@ next_byte:
 				key->size -
 					(sym - (unsigned char *)key->data) - 1,
 				sym + 1,
-				val->size, val->data);
+				val->size, val->data,
+				0, NULL);
 			if (!tmp) return TKVDB_ENOMEM;
 
 			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
@@ -287,7 +305,8 @@ next_byte:
 
 		/* split current node into 3 subnodes */
 		newroot = TKVDB_IMPL_NODE_NEW(trns, 0, pi,
-			prefix_val_meta, 0, NULL);
+			prefix_val_meta, 0, NULL,
+			0, NULL);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		/* rest of prefix (skip current symbol) */
@@ -296,7 +315,8 @@ next_byte:
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size);
+			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size,
+			0, NULL);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);
@@ -311,7 +331,8 @@ next_byte:
 			key->size -
 				(sym - (unsigned char *)key->data) - 1,
 			sym + 1,
-			val->size, val->data);
+			val->size, val->data,
+			0, NULL);
 		if (!subnode_key) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(subnode_rest);
@@ -341,3 +362,4 @@ next_byte:
 }
 
 #undef TKVDB_FIRE_TRIGGERS
+#undef TKVDB_TRIGGER_NODE_PUSH

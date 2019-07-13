@@ -227,6 +227,17 @@ typedef struct tkvdb_cursor_data
 	tkvdb_tr *tr;
 } tkvdb_cursor_data;
 
+/* FIXME: for tests only! */
+#define TKVDB_TRIGGER_STACK_SIZE 128
+
+struct tkvdb_trigger_stack_item
+{
+	size_t val_size;
+	void *val;
+
+	size_t meta_size;
+	void *meta;
+};
 
 /* triggers set */
 struct tkvdb_triggers
@@ -241,6 +252,8 @@ struct tkvdb_triggers
 
 	size_t n_before_first;
 	tkvdb_trigger_func *funcs_before_first;
+
+	struct tkvdb_trigger_stack_item stack[TKVDB_TRIGGER_STACK_SIZE];
 };
 
 
@@ -982,8 +995,6 @@ tkvdb_triggers_add_set(tkvdb_triggers *triggers,
 		before_insert);
 	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_update,
 		before_update);
-	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_first,
-		before_first);
 	return 1;
 }
 
@@ -998,10 +1009,6 @@ tkvdb_triggers_free(tkvdb_triggers *triggers)
 		free(triggers->funcs_before_update);
 		triggers->funcs_before_update = NULL;
 		triggers->n_before_update = 0;
-
-		free(triggers->funcs_before_first);
-		triggers->funcs_before_first = NULL;
-		triggers->n_before_first = 0;
 	}
 	free(triggers);
 }

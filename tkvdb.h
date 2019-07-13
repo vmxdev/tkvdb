@@ -91,7 +91,7 @@ struct tkvdb_tr
 
 	TKVDB_RES (*putx)(tkvdb_tr *tr,
 		const tkvdb_datum *key, const tkvdb_datum *val,
-		const tkvdb_triggers *triggers);
+		tkvdb_triggers *triggers);
 	TKVDB_RES (*getx)(tkvdb_tr *tr,
 		const tkvdb_datum *key, tkvdb_datum *val,
 		const tkvdb_triggers *triggers);
@@ -127,7 +127,6 @@ typedef struct tkvdb_trigger_set
 {
 	tkvdb_trigger_func before_insert;
 	tkvdb_trigger_func before_update;
-	tkvdb_trigger_func before_first;
 } tkvdb_trigger_set;
 
 

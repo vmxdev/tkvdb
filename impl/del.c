@@ -26,7 +26,7 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 	if (!prev) {
 		/* remove root node */
 		TKVDB_IMPL_NODE_FREE(tr, node);
-		node = TKVDB_IMPL_NODE_NEW(trns, 0, 0, NULL, 0, NULL);
+		node = TKVDB_IMPL_NODE_NEW(trns, 0, 0, NULL, 0, NULL, 0, NULL);
 		if (!node) {
 			return TKVDB_ENOMEM;
 		}
