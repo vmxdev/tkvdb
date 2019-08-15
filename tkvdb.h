@@ -123,10 +123,15 @@ struct tkvdb_cursor
 typedef TKVDB_RES (*tkvdb_trigger_func)(tkvdb_tr *tr,
 	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata);
 
+typedef size_t (*tkvdb_trigger_size_func)(const tkvdb_datum *key,
+	const tkvdb_datum *val, int is_leaf, void *userdata);
+
 typedef struct tkvdb_trigger_set
 {
 	tkvdb_trigger_func before_insert;
 	tkvdb_trigger_func before_update;
+
+	tkvdb_trigger_size_func meta_size;
 } tkvdb_trigger_set;
 
 

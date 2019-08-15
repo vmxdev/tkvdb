@@ -689,6 +689,7 @@ test_triggers_basic(void)
 
 	trigger_set.before_update = basic_trigger_update;
 	trigger_set.before_insert = basic_trigger_insert;
+	trigger_set.meta_size = NULL;
 
 	r = tkvdb_triggers_add_set(trg, &trigger_set);
 	TEST_CHECK(r != 0);

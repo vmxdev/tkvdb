@@ -74,11 +74,12 @@ do {                                                                   \
 } while (0)
 
 /* add trigger to corresponding set */
-#define TKVDB_TRIGGERS_ADD(T, F, TYPE)                                 \
+#define TKVDB_TRIGGERS_ADD(T, F, TYPE, FTYPE)                          \
 do {                                                                   \
-	tkvdb_trigger_func *funcs;                                     \
+	FTYPE *funcs;                                                  \
+	if (!F) { break; }                                             \
 	funcs = realloc(T->funcs_ ## TYPE,                             \
-		(T->n_ ## TYPE + 1) * sizeof(tkvdb_trigger_func));     \
+		(T->n_ ## TYPE + 1) * sizeof(FTYPE));                  \
 	if (!funcs) {                                                  \
 		return 0;                                              \
 	}                                                              \
@@ -250,8 +251,8 @@ struct tkvdb_triggers
 	size_t n_before_update;
 	tkvdb_trigger_func *funcs_before_update;
 
-	size_t n_before_first;
-	tkvdb_trigger_func *funcs_before_first;
+	size_t n_meta_size;
+	tkvdb_trigger_size_func *funcs_meta_size;
 
 	struct tkvdb_trigger_stack_item stack[TKVDB_TRIGGER_STACK_SIZE];
 };
@@ -981,8 +982,8 @@ tkvdb_triggers_create(void *userdata)
 	triggers->n_before_update = 0;
 	triggers->funcs_before_update = NULL;
 
-	triggers->n_before_first = 0;
-	triggers->funcs_before_first = NULL;
+	triggers->n_meta_size = 0;
+	triggers->funcs_meta_size = NULL;
 
 	return triggers;
 }
@@ -992,9 +993,11 @@ tkvdb_triggers_add_set(tkvdb_triggers *triggers,
 	const tkvdb_trigger_set *trigger_set)
 {
 	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_insert,
-		before_insert);
+		before_insert, tkvdb_trigger_func);
 	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_update,
-		before_update);
+		before_update, tkvdb_trigger_func);
+	TKVDB_TRIGGERS_ADD(triggers, trigger_set->meta_size,
+		meta_size, tkvdb_trigger_size_func);
 	return 1;
 }
 
@@ -1009,6 +1012,10 @@ tkvdb_triggers_free(tkvdb_triggers *triggers)
 		free(triggers->funcs_before_update);
 		triggers->funcs_before_update = NULL;
 		triggers->n_before_update = 0;
+
+		free(triggers->funcs_meta_size);
+		triggers->funcs_meta_size = NULL;
+		triggers->n_meta_size = 0;
 	}
 	free(triggers);
 }
