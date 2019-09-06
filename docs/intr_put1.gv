@@ -1,0 +1,57 @@
+digraph G
+{
+	rankdir = LR;
+	node1 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">root node</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> none</td></tr>
+			<tr><td port="port3" border="1"><font color="gray">subnodes:</font></td></tr>
+			<tr><td port="port4" border="1"><font color="gray">...</font></td></tr>
+			<tr><td port="port5" border="1">'A'</td></tr>
+			<tr><td port="port6" border="1"><font color="gray">...</font></td></tr>
+			<tr><td port="port7" border="1">'K'</td></tr>
+			<tr><td port="port8" border="1"><font color="gray">...</font></td></tr>
+			<tr><td port="port9" border="1">'P'</td></tr>
+			<tr><td port="port10" border="1"><font color="gray">...</font></td></tr>
+		</table>>
+	]
+	node2 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">leaf</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> NOTHER KEY</td></tr>
+		</table>>
+	]
+	node3 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">node with subnodes</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> EY</td></tr>
+			<tr><td port="port3" border="1"><font color="gray">subnodes:</font></td></tr>
+			<tr><td port="port4" border="1"><font color="gray">...</font></td></tr>
+			<tr><td port="port5" border="1">'1'</td></tr>
+			<tr><td port="port6" border="1"><font color="gray">...</font></td></tr>
+		</table>>
+	]
+	node4 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">leaf</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> REFIX</td></tr>
+		</table>>
+	]
+	node5 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">leaf</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> 00</td></tr>
+		</table>>
+	]
+
+	node1:port5 -> node2:port1 [label="\"ANOTHER KEY\""]
+	node1:port7 -> node3:port1 [label="\"KEY\""]
+	node1:port9 -> node4:port1 [label="\"PREFIX\""]
+	node3:port5 -> node5:port1 [label="\"KEY100\""]
+}
+

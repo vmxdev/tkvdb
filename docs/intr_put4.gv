@@ -1,0 +1,37 @@
+digraph G
+{
+	rankdir = LR;
+	node1 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">root node</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> none</td></tr>
+			<tr><td port="port3" border="1"><font color="gray">subnodes:</font></td></tr>
+			<tr><td port="port4" border="1"><font color="gray">...</font></td></tr>
+			<tr><td port="port5" border="1">'P'</td></tr>
+			<tr><td port="port6" border="1"><font color="gray">...</font></td></tr>
+		</table>>
+	]
+	node2 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">node with subnodes</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> REFIX</td></tr>
+			<tr><td port="port3" border="1"><font color="gray">subnodes:</font></td></tr>
+			<tr><td port="port4" border="1"><font color="gray">...</font></td></tr>
+			<tr><td port="port5" border="1">'N'</td></tr>
+			<tr><td port="port6" border="1"><font color="gray">...</font></td></tr>
+		</table>>
+	]
+	node3 [
+		shape = none
+		label = <<table border="0" cellspacing="0">
+			<tr><td port="port1" border="1"><font color="blue">leaf</font></td></tr>
+			<tr><td port="port2" border="1"><font color="gray">prefix:</font> EW</td></tr>
+		</table>>
+	]
+
+	node1:port5 -> node2:port1 [label="\"PREFIX\""]
+	node2:port5 -> node3:port1 [label="\"PREFIXNEW\""]
+}
+
