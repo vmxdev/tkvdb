@@ -1,8 +1,8 @@
 # Some implementation notes
 
-## How put() function works, all possible combinations of key and prefixes
+## How put() function works, all possible combinations of keys and prefixes
 
-Database keys
+Nodes layout
 
 ![database keys](docs/intr_put1.png?raw=true "database keys")
 
@@ -12,7 +12,7 @@ Initial state (we have key "PREFIX" with value "VAL")
 
 ![node before update](docs/intr_put2.png?raw=true "node before update")
 
-  * Simplest case: `transaction->put("PREFIX", "ANOTHER VAL")` - update existing key. If size of value differs from existing one, new node (with new value) will be created
+  * Simplest case: `transaction->put("PREFIX", "NEW VAL")` - update existing key. If size of new value is the same, nothing changed in nodes layout. Only old value replaced by new one. If size of new value differs, new node (with new value) will be created
 
   * `transaction->put("PRE", "VAL")` - will create two nodes
 
