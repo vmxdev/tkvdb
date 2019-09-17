@@ -71,7 +71,7 @@ TKVDB_IMPL_NODE_ALLOC(tkvdb_tr *trns, size_t node_size)
 void *
 TKVDB_IMPL_NODE_NEW(tkvdb_tr *tr, int type, size_t prefix_size,
 	const void *prefix, size_t val_size, const void *val,
-	size_t meta_size, void **meta)
+	size_t meta_size, void *meta)
 {
 	TKVDB_MEMNODE_TYPE *node;
 	TKVDB_MEMNODE_TYPE_LEAF *node_leaf;
@@ -96,6 +96,13 @@ do {                                                                       \
 		val, val_size);                                            \
 } while(0)
 
+#define COPY_META(NODE)                                                    \
+do {                                                                       \
+	NODE->c.val_pad = VALPADDING(NODE);                                \
+	memcpy(NODE->prefix_val_meta + prefix_size + NODE->c.val_pad       \
+		+ val_size, meta, meta_size);                              \
+} while(0)
+
 #else
 /* non-aligned value */
 #define NODE_ALIGN 0
@@ -103,6 +110,12 @@ do {                                                                       \
 #define COPY_VAL(NODE)                                                     \
 do {                                                                       \
 	memcpy(NODE->prefix_val_meta + prefix_size, val, val_size);        \
+} while(0)
+
+#define COPY_META(NODE)                                                    \
+do {                                                                       \
+	memcpy(NODE->prefix_val_meta + prefix_size + val_size, meta,       \
+		meta_size);                                                \
 } while(0)
 
 #endif
@@ -144,9 +157,8 @@ do {                                                                       \
 		if (val_size > 0) {
 			COPY_VAL(node_leaf);
 		}
-		if (meta) {
-			*meta = node_leaf->prefix_val_meta + prefix_size
-				+ val_size;
+		if (meta && (meta_size > 0)) {
+			COPY_META(node_leaf);
 		}
 		ret = node_leaf;
 	} else {
@@ -162,9 +174,8 @@ do {                                                                       \
 #ifndef TKVDB_PARAMS_NODBFILE
 		memset(node->fnext, 0, sizeof(uint64_t) * 256);
 #endif
-		if (meta) {
-			*meta = node->prefix_val_meta + prefix_size
-				+ val_size;
+		if (meta && (meta_size > 0)) {
+			COPY_META(node);
 		}
 		ret = node;
 	}
@@ -174,6 +185,7 @@ do {                                                                       \
 #undef PTR_TO_VAL
 #undef VALPADDING
 #undef COPY_VAL
+#undef COPY_META
 }
 
 static void

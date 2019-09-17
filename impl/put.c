@@ -35,9 +35,9 @@ do {                                                                        \
 	}                                                                   \
 } while (0)
 
-#define TKVDB_TRIGGER_NODE_PUSH(T, NODE, SIZE)                        \
+#define TKVDB_TRIGGER_NODE_PUSH(T, NODE, SIZE)                              \
 do {                                                                        \
-	T->stack[SIZE].val = NULL;                                     \
+	T->stack[SIZE].val = NULL;                                          \
 	SIZE++;                                                             \
 } while (0)
 
@@ -73,7 +73,6 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 	tkvdb_tr_data *tr = trns->data;
 
 #ifdef TKVDB_TRIGGER
-	(void)triggers;
 	size_t stack_size = 0;
 #endif
 
@@ -96,6 +95,7 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 			TKVDB_EXEC( TKVDB_IMPL_NODE_READ(trns,
 				tr->db->info.footer.root_off, &new_root) );
 
+			TKVDB_TRIGGER_NODE_PUSH(triggers, new_root, stack_size);
 			tr->root = new_root;
 		} else 
 #endif
@@ -161,13 +161,14 @@ next_byte:
 				return TKVDB_OK;
 			}
 
-			TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
-
+			/* value with different size */
 			newroot = TKVDB_IMPL_NODE_NEW(trns,
 				node->c.type | TKVDB_NODE_VAL,
 				pi, prefix_val_meta,
 				val->size, val->data,
-				meta_size, NULL);
+				node->c.meta_size,
+				prefix_val_meta + node->c.prefix_size
+					+ VAL_ALIGN_PAD + val->size);
 			if (!newroot) return TKVDB_ENOMEM;
 
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
@@ -188,12 +189,12 @@ next_byte:
   [p][r][e] - new root
   next['f'] => [i][x] - tail
 */
-		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
-
 		newroot = TKVDB_IMPL_NODE_NEW(trns, TKVDB_NODE_VAL, pi,
 			prefix_val_meta,
 			val->size, val->data,
-			meta_size, NULL);
+			node->c.meta_size,
+			prefix_val_meta + node->c.prefix_size
+				+ VAL_ALIGN_PAD + val->size);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
@@ -237,8 +238,6 @@ next_byte:
 			/* create 2 nodes */
 			TKVDB_MEMNODE_TYPE *newroot, *subnode_rest;
 
-			TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
-
 			newroot = TKVDB_IMPL_NODE_NEW(trns,
 				node->c.type & (~TKVDB_NODE_LEAF),
 				node->c.prefix_size,
@@ -247,7 +246,9 @@ next_byte:
 				prefix_val_meta
 					+ VAL_ALIGN_PAD
 					+ node->c.prefix_size,
-				meta_size, NULL);
+				node->c.meta_size,
+				prefix_val_meta + node->c.prefix_size
+					+ VAL_ALIGN_PAD + val->size);
 			if (!newroot) {
 				if (tr->params.tr_buf_dynalloc) {
 					free(newroot);
@@ -331,11 +332,11 @@ next_byte:
 		TKVDB_MEMNODE_TYPE *newroot, *subnode_rest, *subnode_key;
 
 		/* split current node into 3 subnodes */
-		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
-
 		newroot = TKVDB_IMPL_NODE_NEW(trns, 0, pi,
 			prefix_val_meta, 0, NULL,
-			meta_size, NULL);
+			node->c.meta_size,
+			prefix_val_meta + node->c.prefix_size
+				+ VAL_ALIGN_PAD + val->size);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		/* rest of prefix (skip current symbol) */
