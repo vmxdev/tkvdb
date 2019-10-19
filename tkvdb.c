@@ -228,17 +228,6 @@ typedef struct tkvdb_cursor_data
 	tkvdb_tr *tr;
 } tkvdb_cursor_data;
 
-/* FIXME: for tests only! */
-#define TKVDB_TRIGGER_STACK_SIZE 128
-
-struct tkvdb_trigger_stack_item
-{
-	size_t val_size;
-	void *val;
-
-	size_t meta_size;
-	void *meta;
-};
 
 /* triggers set */
 struct tkvdb_triggers
@@ -254,7 +243,7 @@ struct tkvdb_triggers
 	size_t n_meta_size;
 	tkvdb_trigger_size_func *funcs_meta_size;
 
-	struct tkvdb_trigger_stack_item stack[TKVDB_TRIGGER_STACK_SIZE];
+	tkvdb_trigger_stack stack;
 };
 
 
@@ -965,7 +954,7 @@ fail_calloc:
 
 /* triggers */
 tkvdb_triggers *
-tkvdb_triggers_create(void *userdata)
+tkvdb_triggers_create(size_t stack_size, void *userdata)
 {
 	tkvdb_triggers *triggers;
 
@@ -973,6 +962,14 @@ tkvdb_triggers_create(void *userdata)
 	if (!triggers) {
 		return NULL;
 	}
+
+	/* FIXME: add dynamic allocation */
+	triggers->stack.valmeta = malloc(stack_size * sizeof(struct valmeta));
+	if (!triggers->stack.valmeta) {
+		free(triggers);
+		return NULL;
+	}
+	triggers->stack.size = stack_size;
 
 	triggers->userdata = userdata;
 
@@ -1017,6 +1014,7 @@ tkvdb_triggers_free(tkvdb_triggers *triggers)
 		triggers->funcs_meta_size = NULL;
 		triggers->n_meta_size = 0;
 	}
+	free(triggers->stack.valmeta);
 	free(triggers);
 }
 

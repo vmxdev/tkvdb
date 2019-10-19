@@ -16,6 +16,13 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifdef TKVDB_PARAMS_ALIGN_VAL
+#define VAL_ALIGN_PAD(NODE) (NODE->c.val_pad)
+#else
+#define VAL_ALIGN_PAD(NODE) 0
+#endif
+
+
 #ifdef TKVDB_TRIGGER
 
 #define TKVDB_TRIGGERS_CALC_META_SIZE(T, S)                                 \
@@ -23,7 +30,7 @@ do {                                                                        \
 	size_t trg_idx;                                                     \
 	S = 0;                                                              \
 	for (trg_idx=0; trg_idx<T->n_meta_size; trg_idx++) {                \
-		S += T->funcs_meta_size[trg_idx](key, val, 0, T->userdata); \
+		S += T->funcs_meta_size[trg_idx](key, val, T->userdata);    \
 	}                                                                   \
 } while (0)
 
@@ -31,13 +38,20 @@ do {                                                                        \
 do {                                                                        \
 	size_t trg_idx;                                                     \
 	for (trg_idx=0; trg_idx<T->n_ ## TYPE; trg_idx++) {                 \
-		(*T->funcs_ ## TYPE[trg_idx])(trns, key, val, T->userdata); \
+		(*T->funcs_ ## TYPE[trg_idx])                               \
+			(trns, key, NULL, T->userdata);                     \
 	}                                                                   \
 } while (0)
 
 #define TKVDB_TRIGGER_NODE_PUSH(T, NODE, SIZE)                              \
 do {                                                                        \
-	T->stack[SIZE].val = NULL;                                          \
+	T->stack.valmeta[SIZE].val.data = NODE->prefix_val_meta             \
+		+ NODE->c.prefix_size + VAL_ALIGN_PAD(NODE);                \
+	T->stack.valmeta[SIZE].val.size = NODE->c.val_size;                 \
+	T->stack.valmeta[SIZE].meta.data =                                  \
+		(uint8_t *)T->stack.valmeta[SIZE].val.data                  \
+		+ NODE->c.val_size;                                         \
+	T->stack.valmeta[SIZE].meta.size = NODE->c.meta_size;               \
 	SIZE++;                                                             \
 } while (0)
 
@@ -76,11 +90,6 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 	size_t stack_size = 0;
 #endif
 
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-#define VAL_ALIGN_PAD (node->c.val_pad)
-#else
-#define VAL_ALIGN_PAD 0
-#endif
 
 	if (!tr->started) {
 		return TKVDB_NOT_STARTED;
@@ -112,6 +121,7 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 
 			TKVDB_TRIGGER_NODE_PUSH(triggers, new_root, stack_size);
 			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+
 			tr->root = new_root;
 			return TKVDB_OK;
 		}
@@ -156,7 +166,7 @@ next_byte:
 				TKVDB_FIRE_TRIGGERS(triggers, before_update);
 				memcpy(prefix_val_meta
 					+ node->c.prefix_size
-					+ VAL_ALIGN_PAD,
+					+ VAL_ALIGN_PAD(node),
 					val->data, val->size);
 				return TKVDB_OK;
 			}
@@ -168,11 +178,12 @@ next_byte:
 				val->size, val->data,
 				node->c.meta_size,
 				prefix_val_meta + node->c.prefix_size
-					+ VAL_ALIGN_PAD + val->size);
+					+ VAL_ALIGN_PAD(node) + val->size);
 			if (!newroot) return TKVDB_ENOMEM;
 
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
 
+			TKVDB_TRIGGER_NODE_PUSH(triggers, newroot, stack_size);
 			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
 
 			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
@@ -194,7 +205,7 @@ next_byte:
 			val->size, val->data,
 			node->c.meta_size,
 			prefix_val_meta + node->c.prefix_size
-				+ VAL_ALIGN_PAD + val->size);
+				+ VAL_ALIGN_PAD(node) + val->size);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
@@ -204,7 +215,8 @@ next_byte:
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size,
+			prefix_val_meta + VAL_ALIGN_PAD(node)
+				+ node->c.prefix_size,
 			meta_size, NULL);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
@@ -217,6 +229,7 @@ next_byte:
 		newroot->next[prefix_val_meta[pi]] = subnode_rest;
 		newroot->c.nsubnodes += 1;
 
+		TKVDB_TRIGGER_NODE_PUSH(triggers, subnode_rest, stack_size);
 		TKVDB_FIRE_TRIGGERS(triggers, before_insert);
 
 		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
@@ -244,11 +257,11 @@ next_byte:
 				prefix_val_meta,
 				node->c.val_size,
 				prefix_val_meta
-					+ VAL_ALIGN_PAD
+					+ VAL_ALIGN_PAD(node)
 					+ node->c.prefix_size,
 				node->c.meta_size,
 				prefix_val_meta + node->c.prefix_size
-					+ VAL_ALIGN_PAD + val->size);
+					+ VAL_ALIGN_PAD(node) + val->size);
 			if (!newroot) {
 				if (tr->params.tr_buf_dynalloc) {
 					free(newroot);
@@ -336,7 +349,7 @@ next_byte:
 			prefix_val_meta, 0, NULL,
 			node->c.meta_size,
 			prefix_val_meta + node->c.prefix_size
-				+ VAL_ALIGN_PAD + val->size);
+				+ VAL_ALIGN_PAD(node) + val->size);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		/* rest of prefix (skip current symbol) */
@@ -347,7 +360,8 @@ next_byte:
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + VAL_ALIGN_PAD + node->c.prefix_size,
+			prefix_val_meta + VAL_ALIGN_PAD(node)
+				+ node->c.prefix_size,
 			meta_size, NULL);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
@@ -356,6 +370,8 @@ next_byte:
 			return TKVDB_ENOMEM;
 		}
 		TKVDB_IMPL_CLONE_SUBNODES(subnode_rest, node);
+
+		/*TKVDB_FIRE_TRIGGERS(triggers, before_insert);*/
 
 		/* rest of key */
 		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
@@ -392,9 +408,10 @@ next_byte:
 	goto next_byte;
 
 	return TKVDB_OK;
-#undef VAL_ALIGN_PAD
 }
 
 #undef TKVDB_TRIGGERS_CALC_META_SIZE
 #undef TKVDB_FIRE_TRIGGERS
 #undef TKVDB_TRIGGER_NODE_PUSH
+
+#undef VAL_ALIGN_PAD

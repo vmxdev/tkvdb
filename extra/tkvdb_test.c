@@ -641,11 +641,11 @@ struct basic_trigger_data
 
 static TKVDB_RES
 basic_trigger_update(tkvdb_tr *tr,
-	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata)
+	const tkvdb_datum *key, const tkvdb_trigger_stack *s, void *userdata)
 {
 	(void)tr;
 	(void)key;
-	(void)val;
+	(void)s;
 
 	struct basic_trigger_data *data = userdata;
 
@@ -656,17 +656,28 @@ basic_trigger_update(tkvdb_tr *tr,
 
 static TKVDB_RES
 basic_trigger_insert(tkvdb_tr *tr,
-	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata)
+	const tkvdb_datum *key, const tkvdb_trigger_stack *s, void *userdata)
 {
 	(void)tr;
 	(void)key;
-	(void)val;
+	(void)s;
 
 	struct basic_trigger_data *data = userdata;
 
 	data->inserts++;
 
 	return TKVDB_OK;
+}
+
+static size_t
+basic_trigger_meta_size(const tkvdb_datum *key, const tkvdb_datum *val,
+	void *userdata)
+{
+	(void)key;
+	(void)val;
+	(void)userdata;
+
+	return sizeof(uint64_t);
 }
 
 void
@@ -684,12 +695,12 @@ test_triggers_basic(void)
 	tr = tkvdb_tr_create(NULL, NULL);
 	TEST_CHECK(tr != NULL);
 
-	trg = tkvdb_triggers_create(&userdata);
+	trg = tkvdb_triggers_create(128, &userdata);
 	TEST_CHECK(trg != NULL);
 
 	trigger_set.before_update = basic_trigger_update;
 	trigger_set.before_insert = basic_trigger_insert;
-	trigger_set.meta_size = NULL;
+	trigger_set.meta_size = basic_trigger_meta_size;
 
 	r = tkvdb_triggers_add_set(trg, &trigger_set);
 	TEST_CHECK(r != 0);

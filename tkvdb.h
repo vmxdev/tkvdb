@@ -120,11 +120,20 @@ struct tkvdb_cursor
 };
 
 /* triggers */
-typedef TKVDB_RES (*tkvdb_trigger_func)(tkvdb_tr *tr,
-	const tkvdb_datum *key, const tkvdb_datum *val, void *userdata);
+typedef struct tkvdb_trigger_stack
+{
+	size_t size;
+	struct valmeta
+	{
+		tkvdb_datum val, meta;
+	} *valmeta;
+} tkvdb_trigger_stack;
+
+typedef TKVDB_RES (*tkvdb_trigger_func)(tkvdb_tr *tr, const tkvdb_datum *key,
+	const tkvdb_trigger_stack *stack, void *userdata);
 
 typedef size_t (*tkvdb_trigger_size_func)(const tkvdb_datum *key,
-	const tkvdb_datum *val, int is_leaf, void *userdata);
+	const tkvdb_datum *val, void *userdata);
 
 typedef struct tkvdb_trigger_set
 {
@@ -167,7 +176,7 @@ TKVDB_RES tkvdb_dbinfo(tkvdb *db, uint64_t *root_off,
 
 
 /* triggers */
-tkvdb_triggers *tkvdb_triggers_create(void *userdata);
+tkvdb_triggers *tkvdb_triggers_create(size_t stack_size, void *userdata);
 void tkvdb_triggers_free(tkvdb_triggers *triggers);
 
 int tkvdb_triggers_add_set(tkvdb_triggers *triggers,
