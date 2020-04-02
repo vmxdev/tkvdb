@@ -120,26 +120,43 @@ struct tkvdb_cursor
 };
 
 /* triggers */
+
+/* types of insert */
+enum TKVDB_TRIGGER_INSERT_TYPE
+{
+	TKVDB_TRIGGER_INSERT_NEWNODE,
+	TKVDB_TRIGGER_INSERT_SHORTER,
+	TKVDB_TRIGGER_INSERT_LONGER,
+	TKVDB_TRIGGER_INSERT_SPLIT,
+	TKVDB_TRIGGER_INSERT_NEWROOT
+};
+
 typedef struct tkvdb_trigger_stack
 {
 	size_t size;
-	struct valmeta
+	struct tkvdb_trigger_valmeta
 	{
 		tkvdb_datum val, meta;
 	} *valmeta;
 } tkvdb_trigger_stack;
 
-typedef TKVDB_RES (*tkvdb_trigger_func)(tkvdb_tr *tr, const tkvdb_datum *key,
-	const tkvdb_trigger_stack *stack, void *userdata);
+typedef struct tkvdb_trigger_info
+{
+	tkvdb_tr *tr;
+	tkvdb_datum *key;
+	tkvdb_trigger_stack *stack;
+	enum TKVDB_TRIGGER_INSERT_TYPE itype;
+	void *userdata;
+} tkvdb_trigger_info;
 
-typedef size_t (*tkvdb_trigger_size_func)(const tkvdb_datum *key,
-	const tkvdb_datum *val, void *userdata);
+
+typedef TKVDB_RES (*tkvdb_trigger_put_func)(tkvdb_trigger_info *info);
+typedef size_t (*tkvdb_trigger_size_func)(const void *userdata);
 
 typedef struct tkvdb_trigger_set
 {
-	tkvdb_trigger_func before_insert;
-	tkvdb_trigger_func before_update;
-
+	tkvdb_trigger_put_func update;
+	tkvdb_trigger_put_func insert;
 	tkvdb_trigger_size_func meta_size;
 } tkvdb_trigger_set;
 

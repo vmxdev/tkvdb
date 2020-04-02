@@ -30,18 +30,77 @@ do {                                                                        \
 	size_t trg_idx;                                                     \
 	S = 0;                                                              \
 	for (trg_idx=0; trg_idx<T->n_meta_size; trg_idx++) {                \
-		S += T->funcs_meta_size[trg_idx](key, val, T->userdata);    \
+		S += T->funcs_meta_size[trg_idx](T->userdata);              \
 	}                                                                   \
 } while (0)
 
-#define TKVDB_FIRE_TRIGGERS(T, TYPE)                                        \
+#define TKVDB_TRIGGERS_UPDATE(T)                                            \
 do {                                                                        \
 	size_t trg_idx;                                                     \
-	for (trg_idx=0; trg_idx<T->n_ ## TYPE; trg_idx++) {                 \
-		(*T->funcs_ ## TYPE[trg_idx])                               \
-			(trns, key, NULL, T->userdata);                     \
+	T->info.tr = trns;                                                  \
+	T->info.userdata = T->userdata;                                     \
+	for (trg_idx=0; trg_idx<T->n_insert; trg_idx++) {                   \
+		(*T->funcs_update[trg_idx])(&(T->info));                    \
 	}                                                                   \
 } while (0)
+
+
+#define TKVDB_TRIGGERS_NEWROOT(T)                                           \
+do {                                                                        \
+	size_t trg_idx;                                                     \
+	T->info.tr = trns;                                                  \
+	T->info.userdata = T->userdata;                                     \
+	T->info.itype = TKVDB_TRIGGER_INSERT_NEWROOT;                       \
+	for (trg_idx=0; trg_idx<T->n_insert; trg_idx++) {                   \
+		(*T->funcs_insert[trg_idx])(&(T->info));                    \
+	}                                                                   \
+} while (0)
+
+#define TKVDB_TRIGGERS_SHORTER(T)                                           \
+do {                                                                        \
+	size_t trg_idx;                                                     \
+	T->info.tr = trns;                                                  \
+	T->info.userdata = T->userdata;                                     \
+	T->info.itype = TKVDB_TRIGGER_INSERT_SHORTER;                       \
+	for (trg_idx=0; trg_idx<T->n_insert; trg_idx++) {                   \
+		(*T->funcs_insert[trg_idx])(&(T->info));                    \
+	}                                                                   \
+} while (0)
+
+#define TKVDB_TRIGGERS_LONGER(T)                                            \
+do {                                                                        \
+	size_t trg_idx;                                                     \
+	T->info.tr = trns;                                                  \
+	T->info.userdata = T->userdata;                                     \
+	T->info.itype = TKVDB_TRIGGER_INSERT_LONGER;                        \
+	for (trg_idx=0; trg_idx<T->n_insert; trg_idx++) {                   \
+		(*T->funcs_insert[trg_idx])(&(T->info));                    \
+	}                                                                   \
+} while (0)
+
+#define TKVDB_TRIGGERS_NEWNODE(T)                                           \
+do {                                                                        \
+	size_t trg_idx;                                                     \
+	T->info.tr = trns;                                                  \
+	T->info.userdata = T->userdata;                                     \
+	T->info.itype = TKVDB_TRIGGER_INSERT_NEWNODE;                       \
+	for (trg_idx=0; trg_idx<T->n_insert; trg_idx++) {                   \
+		(*T->funcs_insert[trg_idx])(&(T->info));                    \
+	}                                                                   \
+} while (0)
+
+#define TKVDB_TRIGGERS_SPLIT(T)                                             \
+do {                                                                        \
+	size_t trg_idx;                                                     \
+	T->info.tr = trns;                                                  \
+	T->info.userdata = T->userdata;                                     \
+	T->info.itype = TKVDB_TRIGGER_INSERT_SPLIT;                         \
+	for (trg_idx=0; trg_idx<T->n_insert; trg_idx++) {                   \
+		(*T->funcs_insert[trg_idx])(&(T->info));                    \
+	}                                                                   \
+} while (0)
+
+
 
 #define TKVDB_TRIGGER_NODE_PUSH(T, NODE, SIZE)                              \
 do {                                                                        \
@@ -58,7 +117,14 @@ do {                                                                        \
 #else
 
 #define TKVDB_TRIGGERS_CALC_META_SIZE(T, S)
-#define TKVDB_FIRE_TRIGGERS(T, TYPE)
+
+#define TKVDB_TRIGGERS_UPDATE(T)
+#define TKVDB_TRIGGERS_NEWROOT(T)
+#define TKVDB_TRIGGERS_SHORTER(T)
+#define TKVDB_TRIGGERS_LONGER(T)
+#define TKVDB_TRIGGERS_NEWNODE(T)
+#define TKVDB_TRIGGERS_SPLIT(T)
+
 #define TKVDB_TRIGGER_NODE_PUSH(T, NODE, SIZE)
 
 #endif
@@ -104,7 +170,8 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 			TKVDB_EXEC( TKVDB_IMPL_NODE_READ(trns,
 				tr->db->info.footer.root_off, &new_root) );
 
-			TKVDB_TRIGGER_NODE_PUSH(triggers, new_root, stack_size);
+			TKVDB_TRIGGER_NODE_PUSH(triggers, new_root,
+				stack_size);
 			tr->root = new_root;
 		} else 
 #endif
@@ -119,8 +186,9 @@ TKVDB_IMPL_PUT(tkvdb_tr *trns, const tkvdb_datum *key, const tkvdb_datum *val)
 				return TKVDB_ENOMEM;
 			}
 
-			TKVDB_TRIGGER_NODE_PUSH(triggers, new_root, stack_size);
-			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+			TKVDB_TRIGGER_NODE_PUSH(triggers, new_root,
+				stack_size);
+			TKVDB_TRIGGERS_NEWROOT(triggers);
 
 			tr->root = new_root;
 			return TKVDB_OK;
@@ -147,12 +215,12 @@ next_byte:
 
 /* end of key
   Here we have two cases:
-  [p][r][e][f][i][x] - prefix
-  [p][r][e] - new key
+  [1][2][3][4][5][6] - prefix
+  [1][2][3] - new key
 
   or exact match:
-  [p][r][e][f][i][x] - prefix
-  [p][r][e][f][i][x] - new key
+  [1][2][3][4][5][6] - prefix
+  [1][2][3][4][5][6] - new key
 */
 	if (sym >= ((unsigned char *)key->data + key->size)) {
 		TKVDB_MEMNODE_TYPE *newroot, *subnode_rest;
@@ -163,7 +231,7 @@ next_byte:
 				&& (val->size != 0)) {
 				/* same value size, so copy new value and
 					return */
-				TKVDB_FIRE_TRIGGERS(triggers, before_update);
+				TKVDB_TRIGGERS_UPDATE(triggers);
 				memcpy(prefix_val_meta
 					+ node->c.prefix_size
 					+ VAL_ALIGN_PAD(node),
@@ -184,7 +252,7 @@ next_byte:
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
 
 			TKVDB_TRIGGER_NODE_PUSH(triggers, newroot, stack_size);
-			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+			TKVDB_TRIGGERS_UPDATE(triggers);
 
 			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 				rnodes_chain, node, newroot);
@@ -193,12 +261,12 @@ next_byte:
 		}
 
 /* split node with prefix
-  [p][r][e][f][i][x] - prefix
-  [p][r][e] - new key
+  [1][2][3][4][5][6] - prefix
+  [1][2][3] - new key
 
   becomes
-  [p][r][e] - new root
-  next['f'] => [i][x] - tail
+  [1][2][3] - new root
+  next['4'] => [5][6] - tail
 */
 		newroot = TKVDB_IMPL_NODE_NEW(trns, TKVDB_NODE_VAL, pi,
 			prefix_val_meta,
@@ -230,7 +298,7 @@ next_byte:
 		newroot->c.nsubnodes += 1;
 
 		TKVDB_TRIGGER_NODE_PUSH(triggers, subnode_rest, stack_size);
-		TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+		TKVDB_TRIGGERS_SHORTER(triggers);
 
 		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 			rnodes_chain, node, newroot);
@@ -239,12 +307,12 @@ next_byte:
 	}
 
 /* end of prefix
-  [p][r][e][f][i][x] - old prefix
-  [p][r][e][f][i][x][n][e][w]- new prefix
+  [1][2][3][4][5][6] - old prefix
+  [1][2][3][4][5][6][7][8][9]- new prefix
 
   so we hold old node and change only pointer to next
-  [p][r][e][f][i][x]
-  next['n'] => [e][w] - tail
+  [1][2][3][4][5][6]
+  next['7'] => [8][9] - tail
 */
 	if (pi >= node->c.prefix_size) {
 		if (node->c.type & TKVDB_NODE_LEAF) {
@@ -283,7 +351,8 @@ next_byte:
 			newroot->c.nsubnodes += 1;
 			newroot->next[*sym] = subnode_rest;
 
-			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+			TKVDB_TRIGGER_NODE_PUSH(triggers, newroot, stack_size);
+			TKVDB_TRIGGERS_LONGER(triggers);
 
 			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 				rnodes_chain, node, newroot);
@@ -325,7 +394,7 @@ next_byte:
 				meta_size, NULL);
 			if (!tmp) return TKVDB_ENOMEM;
 
-			TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+			TKVDB_TRIGGERS_NEWNODE(triggers);
 
 			node->next[*sym] = tmp;
 			node->c.nsubnodes += 1; /* XXX: not atomic */
@@ -334,12 +403,12 @@ next_byte:
 	}
 
 /* node prefix don't match with corresponding part of key
-  [p][r][e][f][i][x] - old prefix
-  [p][r][e][p][a][r][e]- new prefix
+  [1][2][3][4][5][6] - old prefix
+  [1][2][3][7][8][9][0]- new prefix
 
-  [p][r][e] - new root
-  next['f'] => [i][x] - tail from old prefix
-  next['p'] => [a][r][e] - tail from new prefix
+  [1][2][3] - new root
+  next['4'] => [5][6] - tail from old prefix
+  next['7'] => [8][9][0] - tail from new prefix
 */
 	if (prefix_val_meta[pi] != *sym) {
 		TKVDB_MEMNODE_TYPE *newroot, *subnode_rest, *subnode_key;
@@ -371,8 +440,6 @@ next_byte:
 		}
 		TKVDB_IMPL_CLONE_SUBNODES(subnode_rest, node);
 
-		/*TKVDB_FIRE_TRIGGERS(triggers, before_insert);*/
-
 		/* rest of key */
 		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
 
@@ -395,7 +462,7 @@ next_byte:
 		newroot->next[*sym] = subnode_key;
 		newroot->c.nsubnodes += 2;
 
-		TKVDB_FIRE_TRIGGERS(triggers, before_insert);
+		TKVDB_TRIGGERS_SPLIT(triggers);
 
 		TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 			rnodes_chain, node, newroot);
@@ -411,7 +478,14 @@ next_byte:
 }
 
 #undef TKVDB_TRIGGERS_CALC_META_SIZE
-#undef TKVDB_FIRE_TRIGGERS
+
 #undef TKVDB_TRIGGER_NODE_PUSH
+
+#undef TKVDB_TRIGGERS_UPDATE
+#undef TKVDB_TRIGGERS_NEWROOT
+#undef TKVDB_TRIGGERS_SHORTER
+#undef TKVDB_TRIGGERS_LONGER
+#undef TKVDB_TRIGGERS_NEWNODE
+#undef TKVDB_TRIGGERS_SPLIT
 
 #undef VAL_ALIGN_PAD

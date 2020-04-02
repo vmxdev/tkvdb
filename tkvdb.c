@@ -234,16 +234,18 @@ struct tkvdb_triggers
 {
 	void *userdata;
 
-	size_t n_before_insert;
-	tkvdb_trigger_func *funcs_before_insert;
-
-	size_t n_before_update;
-	tkvdb_trigger_func *funcs_before_update;
-
 	size_t n_meta_size;
 	tkvdb_trigger_size_func *funcs_meta_size;
 
+	size_t n_update;
+	tkvdb_trigger_put_func *funcs_update;
+
+	size_t n_insert;
+	tkvdb_trigger_put_func *funcs_insert;
+
 	tkvdb_trigger_stack stack;
+
+	tkvdb_trigger_info info;
 };
 
 
@@ -962,9 +964,11 @@ tkvdb_triggers_create(size_t stack_size, void *userdata)
 	if (!triggers) {
 		return NULL;
 	}
+	memset(triggers, 0, sizeof(tkvdb_triggers));
 
 	/* FIXME: add dynamic allocation */
-	triggers->stack.valmeta = malloc(stack_size * sizeof(struct valmeta));
+	triggers->stack.valmeta = malloc(stack_size
+		* sizeof(struct tkvdb_trigger_valmeta));
 	if (!triggers->stack.valmeta) {
 		free(triggers);
 		return NULL;
@@ -973,15 +977,6 @@ tkvdb_triggers_create(size_t stack_size, void *userdata)
 
 	triggers->userdata = userdata;
 
-	triggers->n_before_insert = 0;
-	triggers->funcs_before_insert = NULL;
-
-	triggers->n_before_update = 0;
-	triggers->funcs_before_update = NULL;
-
-	triggers->n_meta_size = 0;
-	triggers->funcs_meta_size = NULL;
-
 	return triggers;
 }
 
@@ -989,12 +984,15 @@ int
 tkvdb_triggers_add_set(tkvdb_triggers *triggers,
 	const tkvdb_trigger_set *trigger_set)
 {
-	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_insert,
-		before_insert, tkvdb_trigger_func);
-	TKVDB_TRIGGERS_ADD(triggers, trigger_set->before_update,
-		before_update, tkvdb_trigger_func);
 	TKVDB_TRIGGERS_ADD(triggers, trigger_set->meta_size,
 		meta_size, tkvdb_trigger_size_func);
+
+	TKVDB_TRIGGERS_ADD(triggers, trigger_set->update,
+		update, tkvdb_trigger_put_func);
+
+	TKVDB_TRIGGERS_ADD(triggers, trigger_set->insert,
+		insert, tkvdb_trigger_put_func);
+
 	return 1;
 }
 
@@ -1002,19 +1000,16 @@ void
 tkvdb_triggers_free(tkvdb_triggers *triggers)
 {
 	if (triggers) {
-		free(triggers->funcs_before_insert);
-		triggers->funcs_before_insert = NULL;
-		triggers->n_before_insert = 0;
-
-		free(triggers->funcs_before_update);
-		triggers->funcs_before_update = NULL;
-		triggers->n_before_update = 0;
-
 		free(triggers->funcs_meta_size);
-		triggers->funcs_meta_size = NULL;
-		triggers->n_meta_size = 0;
+
+		free(triggers->funcs_update);
+		free(triggers->funcs_insert);
+
 	}
 	free(triggers->stack.valmeta);
+
+	memset(triggers, 0, sizeof(tkvdb_triggers));
+
 	free(triggers);
 }
 
