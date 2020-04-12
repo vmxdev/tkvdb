@@ -191,6 +191,10 @@ do {                                                                       \
 static void
 TKVDB_IMPL_CLONE_SUBNODES(TKVDB_MEMNODE_TYPE *dst, TKVDB_MEMNODE_TYPE *src)
 {
+	if (dst->c.type & TKVDB_NODE_LEAF) {
+		/* dst has no subnodes, nothing to do */
+		return;
+	}
 	if (src->c.type & TKVDB_NODE_LEAF) {
 		memset(dst->next, 0, sizeof(void *) * 256);
 #ifndef TKVDB_PARAMS_NODBFILE

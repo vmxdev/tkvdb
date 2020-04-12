@@ -1,7 +1,7 @@
 /*
  * tkvdb
  *
- * Copyright (c) 2016-2019, Vladimir Misyurov
+ * Copyright (c) 2016-2020, Vladimir Misyurov
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -286,7 +286,7 @@ next_byte:
 		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
 
 		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
-			node->c.type & (~TKVDB_NODE_LEAF),
+			node->c.type,
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
@@ -431,7 +431,7 @@ next_byte:
 		TKVDB_TRIGGERS_CALC_META_SIZE(triggers, meta_size);
 
 		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
-			node->c.type & (~TKVDB_NODE_LEAF),
+			node->c.type,
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
