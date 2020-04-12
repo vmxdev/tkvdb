@@ -124,28 +124,26 @@ struct tkvdb_cursor
 /* types of insert */
 enum TKVDB_TRIGGER_INSERT_TYPE
 {
+	TKVDB_TRIGGER_INSERT_NEWROOT,
 	TKVDB_TRIGGER_INSERT_NEWNODE,
 	TKVDB_TRIGGER_INSERT_SHORTER,
 	TKVDB_TRIGGER_INSERT_LONGER,
-	TKVDB_TRIGGER_INSERT_SPLIT,
-	TKVDB_TRIGGER_INSERT_NEWROOT
+	TKVDB_TRIGGER_INSERT_SPLIT
 };
 
 typedef struct tkvdb_trigger_stack
 {
-	size_t size;
-	struct tkvdb_trigger_valmeta
-	{
-		tkvdb_datum val, meta;
-	} *valmeta;
+	size_t size, limit;
+	void **meta;
 } tkvdb_trigger_stack;
 
 typedef struct tkvdb_trigger_info
 {
-	tkvdb_tr *tr;
-	tkvdb_datum *key;
 	tkvdb_trigger_stack *stack;
+
 	enum TKVDB_TRIGGER_INSERT_TYPE itype;
+	void *newroot, *subnode1, *subnode2;
+
 	void *userdata;
 } tkvdb_trigger_info;
 
@@ -193,7 +191,7 @@ TKVDB_RES tkvdb_dbinfo(tkvdb *db, uint64_t *root_off,
 
 
 /* triggers */
-tkvdb_triggers *tkvdb_triggers_create(size_t stack_size, void *userdata);
+tkvdb_triggers *tkvdb_triggers_create(size_t stack_limit, void *userdata);
 void tkvdb_triggers_free(tkvdb_triggers *triggers);
 
 int tkvdb_triggers_add_set(tkvdb_triggers *triggers,

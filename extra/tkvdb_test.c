@@ -652,9 +652,33 @@ basic_trigger_update(tkvdb_trigger_info *info)
 static TKVDB_RES
 basic_trigger_insert(tkvdb_trigger_info *info)
 {
+	const uint64_t root_meta_val = 0xdeadbeaf;
+
 	struct basic_trigger_data *data = info->userdata;
 
 	data->inserts++;
+
+	switch (info->itype) {
+		case TKVDB_TRIGGER_INSERT_NEWROOT:
+			*((uint64_t *)info->newroot) = root_meta_val;
+			break;
+		case TKVDB_TRIGGER_INSERT_NEWNODE:
+			break;
+		case TKVDB_TRIGGER_INSERT_SHORTER:
+			break;
+		case TKVDB_TRIGGER_INSERT_LONGER:
+			break;
+		case TKVDB_TRIGGER_INSERT_SPLIT:
+			break;
+		default:
+			break;
+	}
+
+	if (info->stack->size > 0) {
+		uint64_t meta = *((uint64_t *)info->stack->meta[0]);
+
+		TEST_CHECK(meta == root_meta_val);
+	}
 
 	return TKVDB_OK;
 }

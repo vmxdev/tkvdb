@@ -232,8 +232,6 @@ typedef struct tkvdb_cursor_data
 /* triggers set */
 struct tkvdb_triggers
 {
-	void *userdata;
-
 	size_t n_meta_size;
 	tkvdb_trigger_size_func *funcs_meta_size;
 
@@ -956,7 +954,7 @@ fail_calloc:
 
 /* triggers */
 tkvdb_triggers *
-tkvdb_triggers_create(size_t stack_size, void *userdata)
+tkvdb_triggers_create(size_t stack_limit, void *userdata)
 {
 	tkvdb_triggers *triggers;
 
@@ -967,15 +965,15 @@ tkvdb_triggers_create(size_t stack_size, void *userdata)
 	memset(triggers, 0, sizeof(tkvdb_triggers));
 
 	/* FIXME: add dynamic allocation */
-	triggers->stack.valmeta = malloc(stack_size
-		* sizeof(struct tkvdb_trigger_valmeta));
-	if (!triggers->stack.valmeta) {
+	triggers->stack.meta = malloc(stack_limit * sizeof(void *));
+	if (!triggers->stack.meta) {
 		free(triggers);
 		return NULL;
 	}
-	triggers->stack.size = stack_size;
+	triggers->stack.limit = stack_limit;
 
-	triggers->userdata = userdata;
+	triggers->info.userdata = userdata;
+	triggers->info.stack = &(triggers->stack);
 
 	return triggers;
 }
@@ -1006,7 +1004,7 @@ tkvdb_triggers_free(tkvdb_triggers *triggers)
 		free(triggers->funcs_insert);
 
 	}
-	free(triggers->stack.valmeta);
+	free(triggers->stack.meta);
 
 	memset(triggers, 0, sizeof(tkvdb_triggers));
 
