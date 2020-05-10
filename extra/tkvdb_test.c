@@ -636,87 +636,113 @@ struct basic_trigger_data
 {
 	size_t inserts;
 	size_t updates;
+
+	uint64_t root_meta;
 };
 
 
 static TKVDB_RES
-basic_trigger_update(tkvdb_trigger_info *info)
+basic_trigger_put(tkvdb_trigger_info *info)
 {
+	size_t i;
 	struct basic_trigger_data *data = info->userdata;
 
-	data->updates++;
-
-	return TKVDB_OK;
-}
-
-static TKVDB_RES
-basic_trigger_insert(tkvdb_trigger_info *info)
-{
-	const uint64_t root_meta_val = 0xdeadbeaf;
-
-	struct basic_trigger_data *data = info->userdata;
-
-	data->inserts++;
-
-	switch (info->itype) {
+	switch (info->type) {
+		case TKVDB_TRIGGER_UPDATE:
+			data->updates++;
+			break;
 		case TKVDB_TRIGGER_INSERT_NEWROOT:
-			*((uint64_t *)info->newroot) = root_meta_val;
+			*((uint64_t *)info->newroot) = 1;
+
+			data->inserts++;
 			break;
 		case TKVDB_TRIGGER_INSERT_NEWNODE:
+			*((uint64_t *)info->subnode1) = 1;
+
+			for (i=0; i<info->stack->size; i++) {
+				*((uint64_t *)info->stack->meta[i]) += 1;
+			}
+
+			data->inserts++;
 			break;
 		case TKVDB_TRIGGER_INSERT_SHORTER:
+			*((uint64_t *)info->newroot) += 1;
+			*((uint64_t *)info->subnode1) = 1;
+
+			for (i=0; i<info->stack->size; i++) {
+				*((uint64_t *)info->stack->meta[i]) += 1;
+			}
+
+			data->inserts++;
 			break;
 		case TKVDB_TRIGGER_INSERT_LONGER:
+			*((uint64_t *)info->newroot) += 1;
+			*((uint64_t *)info->subnode1) = 1;
+
+			for (i=0; i<info->stack->size; i++) {
+				*((uint64_t *)info->stack->meta[i]) += 1;
+			}
+
+			data->inserts++;
 			break;
 		case TKVDB_TRIGGER_INSERT_SPLIT:
+			*((uint64_t *)info->newroot) += 1;
+			*((uint64_t *)info->subnode1) = 1;
+			*((uint64_t *)info->subnode2) = 1;
+
+			for (i=0; i<info->stack->size; i++) {
+				*((uint64_t *)info->stack->meta[i]) += 1;
+			}
+
+			data->inserts++;
 			break;
+
 		default:
 			break;
 	}
 
+	/* save metadata of root node */
 	if (info->stack->size > 0) {
-		uint64_t meta = *((uint64_t *)info->stack->meta[0]);
-
-		TEST_CHECK(meta == root_meta_val);
+		data->root_meta = *((uint64_t *)info->stack->meta[0]);
 	}
 
 	return TKVDB_OK;
-}
-
-static size_t
-basic_trigger_meta_size(const void *userdata)
-{
-	(void)userdata;
-
-	return sizeof(uint64_t);
 }
 
 void
 test_triggers_basic(void)
 {
 	tkvdb_tr *tr;
-	int i, r;
+	int i;
 	char strkey[20];
 	tkvdb_triggers *trg;
-	struct basic_trigger_data userdata;
-	tkvdb_trigger_set trigger_set;
+	struct basic_trigger_data userdata1, userdata2, userdata3;
+	TKVDB_RES r;
 
-	userdata.inserts = userdata.updates = 0;
+	userdata1.inserts = userdata1.updates = 0;
+	userdata1.root_meta = 0;
+	userdata2.inserts = userdata2.updates = 0;
+	userdata2.root_meta = 0;
+	userdata3.inserts = userdata3.updates = 0;
+	userdata3.root_meta = 0;
 
 	tr = tkvdb_tr_create(NULL, NULL);
 	TEST_CHECK(tr != NULL);
 
-	trg = tkvdb_triggers_create(128, &userdata);
+	trg = tkvdb_triggers_create(128);
 	TEST_CHECK(trg != NULL);
 
-	memset(&trigger_set, 0, sizeof(tkvdb_trigger_set));
+	r = tkvdb_triggers_add(trg, &basic_trigger_put, sizeof(uint64_t),
+		&userdata1);
+	TEST_CHECK(r == TKVDB_OK);
 
-	trigger_set.meta_size = basic_trigger_meta_size;
-	trigger_set.update = basic_trigger_update;
-	trigger_set.insert = basic_trigger_insert;
+	r = tkvdb_triggers_add(trg, &basic_trigger_put, sizeof(uint64_t),
+		&userdata2);
+	TEST_CHECK(r == TKVDB_OK);
 
-	r = tkvdb_triggers_add_set(trg, &trigger_set);
-	TEST_CHECK(r != 0);
+	r = tkvdb_triggers_add(trg, &basic_trigger_put, sizeof(uint64_t),
+		&userdata3);
+	TEST_CHECK(r == TKVDB_OK);
 
 	TEST_CHECK(tr->begin(tr) == TKVDB_OK);
 	for (i=0; i<N; i++) {
@@ -734,7 +760,15 @@ test_triggers_basic(void)
 	tr->free(tr);
 	tkvdb_triggers_free(trg);
 
-	TEST_CHECK(userdata.inserts + userdata.updates == N);
+	TEST_CHECK(userdata1.inserts + userdata1.updates == N);
+	TEST_CHECK(userdata2.inserts + userdata2.updates == N);
+	TEST_CHECK(userdata3.inserts + userdata3.updates == N);
+	TEST_CHECK(userdata1.inserts == userdata2.inserts);
+	TEST_CHECK(userdata2.inserts == userdata3.inserts);
+
+	TEST_CHECK(userdata1.inserts == userdata1.root_meta);
+	TEST_CHECK(userdata2.inserts == userdata2.root_meta);
+	TEST_CHECK(userdata3.inserts == userdata3.root_meta);
 }
 
 #if 0

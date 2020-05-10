@@ -121,9 +121,10 @@ struct tkvdb_cursor
 
 /* triggers */
 
-/* types of insert */
-enum TKVDB_TRIGGER_INSERT_TYPE
+/* types of modification */
+enum TKVDB_TRIGGER_MOD_TYPE
 {
+	TKVDB_TRIGGER_UPDATE,
 	TKVDB_TRIGGER_INSERT_NEWROOT,
 	TKVDB_TRIGGER_INSERT_NEWNODE,
 	TKVDB_TRIGGER_INSERT_SHORTER,
@@ -141,23 +142,14 @@ typedef struct tkvdb_trigger_info
 {
 	tkvdb_trigger_stack *stack;
 
-	enum TKVDB_TRIGGER_INSERT_TYPE itype;
+	enum TKVDB_TRIGGER_MOD_TYPE type;
 	void *newroot, *subnode1, *subnode2;
 
 	void *userdata;
 } tkvdb_trigger_info;
 
 
-typedef TKVDB_RES (*tkvdb_trigger_put_func)(tkvdb_trigger_info *info);
-typedef size_t (*tkvdb_trigger_size_func)(const void *userdata);
-
-typedef struct tkvdb_trigger_set
-{
-	tkvdb_trigger_put_func update;
-	tkvdb_trigger_put_func insert;
-	tkvdb_trigger_size_func meta_size;
-} tkvdb_trigger_set;
-
+typedef TKVDB_RES (*tkvdb_trigger_func)(tkvdb_trigger_info *info);
 
 #ifdef __cplusplus
 extern "C" {
@@ -191,11 +183,11 @@ TKVDB_RES tkvdb_dbinfo(tkvdb *db, uint64_t *root_off,
 
 
 /* triggers */
-tkvdb_triggers *tkvdb_triggers_create(size_t stack_limit, void *userdata);
+tkvdb_triggers *tkvdb_triggers_create(size_t stack_limit);
 void tkvdb_triggers_free(tkvdb_triggers *triggers);
 
-int tkvdb_triggers_add_set(tkvdb_triggers *triggers,
-	const tkvdb_trigger_set *trigger_set);
+TKVDB_RES tkvdb_triggers_add(tkvdb_triggers *triggers, tkvdb_trigger_func t,
+	size_t meta_size, void *userdata);
 
 #ifdef __cplusplus
 }

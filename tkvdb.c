@@ -73,20 +73,6 @@ do {                                                                   \
 	}                                                              \
 } while (0)
 
-/* add trigger to corresponding set */
-#define TKVDB_TRIGGERS_ADD(T, F, TYPE, FTYPE)                          \
-do {                                                                   \
-	FTYPE *funcs;                                                  \
-	if (!F) { break; }                                             \
-	funcs = realloc(T->funcs_ ## TYPE,                             \
-		(T->n_ ## TYPE + 1) * sizeof(FTYPE));                  \
-	if (!funcs) {                                                  \
-		return 0;                                              \
-	}                                                              \
-	T->funcs_ ## TYPE = funcs;                                     \
-	T->funcs_ ## TYPE[T->n_ ## TYPE] = F;                          \
-	T->n_ ## TYPE ++;                                              \
-} while (0)
 
 struct tkvdb_params
 {
@@ -229,17 +215,21 @@ typedef struct tkvdb_cursor_data
 } tkvdb_cursor_data;
 
 
-/* triggers set */
+/* triggers */
+struct tkvdb_trigger_func_info
+{
+	tkvdb_trigger_func func;
+	size_t meta_size;
+	void *userdata;
+};
+
 struct tkvdb_triggers
 {
-	size_t n_meta_size;
-	tkvdb_trigger_size_func *funcs_meta_size;
+	size_t n_funcs;
+	struct tkvdb_trigger_func_info *funcs;
 
-	size_t n_update;
-	tkvdb_trigger_put_func *funcs_update;
-
-	size_t n_insert;
-	tkvdb_trigger_put_func *funcs_insert;
+	/* sum of meta_size for each trigger */
+	size_t meta_size;
 
 	tkvdb_trigger_stack stack;
 
@@ -954,7 +944,7 @@ fail_calloc:
 
 /* triggers */
 tkvdb_triggers *
-tkvdb_triggers_create(size_t stack_limit, void *userdata)
+tkvdb_triggers_create(size_t stack_limit)
 {
 	tkvdb_triggers *triggers;
 
@@ -972,38 +962,38 @@ tkvdb_triggers_create(size_t stack_limit, void *userdata)
 	}
 	triggers->stack.limit = stack_limit;
 
-	triggers->info.userdata = userdata;
 	triggers->info.stack = &(triggers->stack);
 
 	return triggers;
 }
 
-int
-tkvdb_triggers_add_set(tkvdb_triggers *triggers,
-	const tkvdb_trigger_set *trigger_set)
+TKVDB_RES
+tkvdb_triggers_add(tkvdb_triggers *triggers, tkvdb_trigger_func func,
+	size_t meta_size, void *userdata)
 {
-	TKVDB_TRIGGERS_ADD(triggers, trigger_set->meta_size,
-		meta_size, tkvdb_trigger_size_func);
+	struct tkvdb_trigger_func_info *funcs;
 
-	TKVDB_TRIGGERS_ADD(triggers, trigger_set->update,
-		update, tkvdb_trigger_put_func);
+	funcs = realloc(triggers->funcs, (triggers->n_funcs + 1)
+		* sizeof(struct tkvdb_trigger_func_info));
+	if (!funcs) {
+		return TKVDB_ENOMEM;
+	}
 
-	TKVDB_TRIGGERS_ADD(triggers, trigger_set->insert,
-		insert, tkvdb_trigger_put_func);
+	funcs[triggers->n_funcs].func = func;
+	funcs[triggers->n_funcs].userdata = userdata;
+	funcs[triggers->n_funcs].meta_size = meta_size;
 
-	return 1;
+	triggers->funcs = funcs;
+	triggers->n_funcs++;
+	triggers->meta_size += meta_size;
+
+	return TKVDB_OK;
 }
 
 void
 tkvdb_triggers_free(tkvdb_triggers *triggers)
 {
-	if (triggers) {
-		free(triggers->funcs_meta_size);
-
-		free(triggers->funcs_update);
-		free(triggers->funcs_insert);
-
-	}
+	free(triggers->funcs);
 	free(triggers->stack.meta);
 
 	memset(triggers, 0, sizeof(tkvdb_triggers));
