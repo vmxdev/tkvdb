@@ -89,12 +89,13 @@ struct tkvdb_tr
 
 	void *data;
 
+	/* triggers and metadata */
 	TKVDB_RES (*putx)(tkvdb_tr *tr,
 		const tkvdb_datum *key, const tkvdb_datum *val,
 		tkvdb_triggers *triggers);
-	TKVDB_RES (*getx)(tkvdb_tr *tr,
-		const tkvdb_datum *key, tkvdb_datum *val,
-		const tkvdb_triggers *triggers);
+
+	TKVDB_RES (*subnode)(tkvdb_tr *tr, void *node, int n, void **subnode,
+		tkvdb_datum *prefix, tkvdb_datum *val, tkvdb_datum *meta);
 };
 
 typedef struct tkvdb_cursor tkvdb_cursor;

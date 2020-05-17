@@ -765,7 +765,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_alignval;
 
 			tr->putx = &tkvdb_put_alignvalx;
-			tr->getx = &tkvdb_get_alignvalx;
+			tr->subnode = &tkvdb_subnode_alignval;
 		} else {
 			/* RAM-only */
 			tr->commit = &tkvdb_commit_alignval_nodb;
@@ -778,7 +778,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_alignval_nodb;
 
 			tr->putx = &tkvdb_put_alignval_nodbx;
-			tr->getx = &tkvdb_get_alignval_nodbx;
+			tr->subnode = &tkvdb_subnode_alignval_nodb;
 		}
 	} else {
 		if (db) {
@@ -792,7 +792,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_generic;
 
 			tr->putx = &tkvdb_put_genericx;
-			tr->getx = &tkvdb_get_genericx;
+			tr->subnode = &tkvdb_subnode_generic;
 		} else {
 			tr->commit = &tkvdb_commit_generic_nodb;
 			tr->rollback = &tkvdb_rollback_generic_nodb;
@@ -804,7 +804,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_generic_nodb;
 
 			tr->putx = &tkvdb_put_generic_nodbx;
-			tr->getx = &tkvdb_get_generic_nodbx;
+			tr->subnode = &tkvdb_subnode_generic_nodb;
 		}
 	}
 

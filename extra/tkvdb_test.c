@@ -749,7 +749,7 @@ test_triggers_basic(void)
 		tkvdb_datum key, val;
 
 		/* 1 insert and 2 updates for each key */
-		snprintf(strkey, sizeof(strkey), "%d", i / 3);
+		snprintf(strkey, sizeof(strkey), "%05d", i / 3);
 		key.data = strkey;
 		key.size = strlen(strkey);
 		val.data = &i;
