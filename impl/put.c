@@ -83,6 +83,13 @@ do {                                                                        \
 	ALL_FUNCTIONS(T);                                                   \
 } while (0)
 
+#define TKVDB_TRIGGERS_SUBKEY(T, N)                                         \
+do {                                                                        \
+	T->info.type = TKVDB_TRIGGER_INSERT_SUBKEY;                         \
+	T->info.newroot = META_ADDR(N);                                     \
+	ALL_FUNCTIONS(T);                                                   \
+} while (0)
+
 #define TKVDB_TRIGGERS_SHORTER(T, N, R)                                     \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_INSERT_SHORTER;                        \
@@ -132,6 +139,7 @@ do {                                                                        \
 
 #define TKVDB_TRIGGERS_UPDATE(T)
 #define TKVDB_TRIGGERS_NEWROOT(T, N)
+#define TKVDB_TRIGGERS_SUBKEY(T, N)
 #define TKVDB_TRIGGERS_SHORTER(T, N, R)
 #define TKVDB_TRIGGERS_LONGER(T, N, R)
 #define TKVDB_TRIGGERS_NEWNODE(T, N, R)
@@ -235,11 +243,13 @@ next_byte:
 
 		if (pi == node->c.prefix_size) {
 			/* exact match */
-			if ((node->c.val_size == val->size)
-				&& (val->size != 0)) {
-				/* same value size, so copy new value and
-					return */
+			if ((node->c.type & TKVDB_NODE_VAL)
+				&& (node->c.val_size == val->size)) {
+
+				/* same value size, so copy new value
+					and return */
 				TKVDB_TRIGGERS_UPDATE(triggers);
+
 				memcpy(prefix_val_meta
 					+ node->c.prefix_size
 					+ VAL_ALIGN_PAD(node),
@@ -247,7 +257,8 @@ next_byte:
 				return TKVDB_OK;
 			}
 
-			/* value with different size */
+			/* value with different size or non-value node,
+				create new node */
 			newroot = TKVDB_IMPL_NODE_NEW(trns,
 				node->c.type | TKVDB_NODE_VAL,
 				pi, prefix_val_meta,
@@ -260,7 +271,11 @@ next_byte:
 
 			TKVDB_IMPL_CLONE_SUBNODES(newroot, node);
 
-			TKVDB_TRIGGERS_UPDATE(triggers);
+			if (node->c.type & TKVDB_NODE_VAL) {
+				TKVDB_TRIGGERS_UPDATE(triggers);
+			} else {
+				TKVDB_TRIGGERS_SUBKEY(triggers, newroot);
+			}
 
 			TKVDB_REPLACE_NODE(!tr->params.tr_buf_dynalloc,
 				rnodes_chain, node, newroot);
@@ -482,9 +497,16 @@ next_byte:
 
 #undef TKVDB_TRIGGERS_UPDATE
 #undef TKVDB_TRIGGERS_NEWROOT
+#undef TKVDB_TRIGGERS_SUBKEY
 #undef TKVDB_TRIGGERS_SHORTER
 #undef TKVDB_TRIGGERS_LONGER
 #undef TKVDB_TRIGGERS_NEWNODE
 #undef TKVDB_TRIGGERS_SPLIT
+
+#undef META_ADDR_LEAF
+#undef META_ADDR_NONLEAF
+#undef META_ADDR
+#undef INC_VOID_PTR
+#undef ALL_FUNCTIONS
 
 #undef VAL_ALIGN_PAD
