@@ -434,6 +434,7 @@ next_byte:
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND(cr,
 				prefix_val_meta, node->c.prefix_size) );
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, -1) );
+
 			return TKVDB_OK;
 		}
 
@@ -515,6 +516,7 @@ next_byte:
 		}
 	}
 
+
 	if (prefix_val_meta[pi] != *sym) {
 		if (seek == TKVDB_SEEK_EQ) {
 			tkvdb_cursor_reset(cr);
@@ -546,6 +548,10 @@ next_byte:
 
 			return TKVDB_IMPL_NEXT(cr);
 		}
+	}
+
+	if ((seek == TKVDB_SEEK_LE) && !(node->c.type & TKVDB_NODE_VAL)) {
+		TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND_SYM(cr, *sym) );
 	}
 
 	sym++;
