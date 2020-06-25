@@ -45,7 +45,6 @@ TKVDB_IMPL_SUBNODE(tkvdb_tr *trns, void *node, int n, void **ret,
 		}
 
 		tmpnode = tr->root;
-		TKVDB_SKIP_RNODES(tmpnode);
 
 		goto ok;
 	}
@@ -56,6 +55,10 @@ TKVDB_IMPL_SUBNODE(tkvdb_tr *trns, void *node, int n, void **ret,
 
 	tmpnode = node;
 	TKVDB_SKIP_RNODES(tmpnode);
+
+	if (tmpnode->c.type & TKVDB_NODE_LEAF) {
+		return TKVDB_NOT_FOUND;
+	}
 
 	tmpnode = tmpnode->next[n];
 	if (tmpnode != NULL) {
@@ -77,6 +80,8 @@ TKVDB_IMPL_SUBNODE(tkvdb_tr *trns, void *node, int n, void **ret,
 	return TKVDB_NOT_FOUND;
 
 ok:
+	TKVDB_SKIP_RNODES(tmpnode);
+
 	if (tmpnode->c.type & TKVDB_NODE_LEAF) {
 		prefix_val_meta =
 			((TKVDB_MEMNODE_TYPE_LEAF *)tmpnode)->prefix_val_meta;
@@ -102,6 +107,10 @@ ok:
 	meta->size = tmpnode->c.meta_size;
 
 	*ret = tmpnode;
+
+	if (!(tmpnode->c.type & TKVDB_NODE_VAL)) {
+		val->data = NULL;
+	}
 
 	return TKVDB_OK;
 }

@@ -91,14 +91,12 @@ TKVDB_IMPL_NODE_NEW(tkvdb_tr *tr, int type, size_t prefix_size,
 
 #define COPY_VAL(NODE)                                                     \
 do {                                                                       \
-	NODE->c.val_pad = VALPADDING(NODE);                                \
 	memcpy(NODE->prefix_val_meta + prefix_size + NODE->c.val_pad,      \
 		val, val_size);                                            \
 } while(0)
 
 #define COPY_META(NODE)                                                    \
 do {                                                                       \
-	NODE->c.val_pad = VALPADDING(NODE);                                \
 	memcpy(NODE->prefix_val_meta + prefix_size + NODE->c.val_pad       \
 		+ val_size, meta, meta_size);                              \
 } while(0)
@@ -154,6 +152,10 @@ do {                                                                       \
 			memcpy(node_leaf->prefix_val_meta,
 				prefix, prefix_size);
 		}
+
+#ifdef TKVDB_PARAMS_ALIGN_VAL
+		node_leaf->c.val_pad = VALPADDING(node_leaf);
+#endif
 		if (val_size > 0) {
 			COPY_VAL(node_leaf);
 		}
@@ -166,6 +168,10 @@ do {                                                                       \
 			memcpy(node->prefix_val_meta,
 				prefix, prefix_size);
 		}
+
+#ifdef TKVDB_PARAMS_ALIGN_VAL
+		node->c.val_pad = VALPADDING(node);
+#endif
 		if (val_size > 0) {
 			COPY_VAL(node);
 		}

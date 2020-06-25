@@ -294,9 +294,7 @@ next_byte:
 		newroot = TKVDB_IMPL_NODE_NEW(trns, TKVDB_NODE_VAL, pi,
 			prefix_val_meta,
 			val->size, val->data,
-			node->c.meta_size,
-			prefix_val_meta + node->c.prefix_size
-				+ VAL_ALIGN_PAD(node) + node->c.val_size);
+			TKVDB_TRIGGERS_META_SIZE(triggers), NULL);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		subnode_rest = TKVDB_IMPL_NODE_NEW(trns,
@@ -306,7 +304,9 @@ next_byte:
 			node->c.val_size,
 			prefix_val_meta + VAL_ALIGN_PAD(node)
 				+ node->c.prefix_size,
-			TKVDB_TRIGGERS_META_SIZE(triggers), NULL);
+			node->c.meta_size,
+			prefix_val_meta + node->c.prefix_size
+				+ VAL_ALIGN_PAD(node) + node->c.val_size);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);
@@ -446,7 +446,9 @@ next_byte:
 			node->c.val_size,
 			prefix_val_meta + VAL_ALIGN_PAD(node)
 				+ node->c.prefix_size,
-			TKVDB_TRIGGERS_META_SIZE(triggers), NULL);
+			node->c.meta_size,
+			prefix_val_meta + node->c.prefix_size
+				+ VAL_ALIGN_PAD(node) + node->c.val_size);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);

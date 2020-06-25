@@ -52,6 +52,12 @@ static void
 gen_rand(void)
 {
 	size_t i, j;
+	unsigned int seed = 0;
+
+	seed = time(NULL);
+	srand(seed);
+
+	fprintf(stderr, "Generating random data with seed %u ... ", seed);
 
 	for (i=0; i<N; i++) {
 		struct kv datum;
@@ -73,7 +79,6 @@ gen_rand(void)
 				break;
 			}
 		}
-
 		datum.vlen = rand() % (VLEN - 1) + 1;
 		for (j=0; j<datum.vlen; j++) {
 			datum.val[j] = rand();
@@ -85,6 +90,8 @@ gen_rand(void)
 	memcpy(&kvs, &kvs_unsorted, sizeof(struct kv) * N);
 	/* sort generated data */
 	qsort(&kvs, N, sizeof(struct kv), &keycmp);
+
+	fprintf(stderr, "done\n");
 }
 
 static void
@@ -761,8 +768,8 @@ trigger_nth(tkvdb_trigger_info *info)
 
 			break;
 		case TKVDB_TRIGGER_INSERT_SHORTER:
-			*((uint64_t *)info->newroot) += 1;
-			*((uint64_t *)info->subnode1) = 1;
+			*((uint64_t *)info->newroot) =
+			*((uint64_t *)info->subnode1) + 1;
 
 			for (i=0; i<info->stack->size; i++) {
 				*((uint64_t *)info->stack->meta[i]) += 1;
@@ -779,8 +786,8 @@ trigger_nth(tkvdb_trigger_info *info)
 
 			break;
 		case TKVDB_TRIGGER_INSERT_SPLIT:
-			*((uint64_t *)info->newroot) += 1;
-			*((uint64_t *)info->subnode1) = 1;
+			*((uint64_t *)info->newroot) =
+				*((uint64_t *)info->subnode1) + 1;
 			*((uint64_t *)info->subnode2) = 1;
 
 			for (i=0; i<info->stack->size; i++) {
@@ -795,6 +802,128 @@ trigger_nth(tkvdb_trigger_info *info)
 
 	return TKVDB_OK;
 }
+
+#define TKVDB_TRG_GET_NTH_REALLOC_KEY(K, LEN, A)                      \
+do {                                                                  \
+	if (A < (K->size + LEN)) {                                    \
+		void *tmp = realloc(K->data, K->size + LEN);          \
+		if (!tmp) {                                           \
+			return TKVDB_ENOMEM;                          \
+		}                                                     \
+		K->data = tmp;                                        \
+		A = K->size + LEN;                                    \
+	}                                                             \
+} while (0)
+
+static TKVDB_RES
+tkvdb_get_nth(tkvdb_tr *tr, uint64_t n, tkvdb_datum *key, tkvdb_datum *val,
+		tkvdb_datum *prealloc)
+{
+	tkvdb_datum pfx, meta;
+	void *node, *subnode;
+	uint64_t s = 0;
+	TKVDB_RES r;
+	int i, prev_i = 0;
+	uint64_t nmeta;
+	size_t allocated;
+
+	if (prealloc) {
+		allocated = prealloc->size;
+		key->data = prealloc->data;
+	} else {
+		allocated = 0;
+		key->data = NULL;
+	}
+	key->size = 0;
+
+	/* get root node */
+	r = tr->subnode(tr, NULL, 0, &node, &pfx, val, &meta);
+	if (r != TKVDB_OK) {
+		return r;
+	}
+	nmeta = *((uint64_t *)meta.data);
+
+	if ((n + 1) > nmeta) {
+		return TKVDB_NOT_FOUND;
+	}
+next:
+	/* append prefix to key */
+	TKVDB_TRG_GET_NTH_REALLOC_KEY(key, pfx.size, allocated);
+	memcpy((char *)(key->data) + key->size, pfx.data, pfx.size);
+	key->size += pfx.size;
+
+	if (val->data) {
+		s += 1;
+		if (s == (n + 1)) {
+			goto ok;
+		}
+	}
+
+	for (i=0; i<256; i++) {
+		r = tr->subnode(tr, node, i, &subnode, &pfx, val, &meta);
+		if (r != TKVDB_OK) {
+			continue;
+		}
+
+		nmeta = *((uint64_t *)meta.data);
+
+		prev_i = i;
+
+		if ((s + nmeta) == (n + 1)) {
+			TKVDB_TRG_GET_NTH_REALLOC_KEY(key, 1, allocated);
+			((char *)(key->data))[key->size] = i;
+			key->size += 1;
+
+			if (!val->data) {
+				/* non-val node */
+				node = subnode;
+				prev_i = i;
+				goto next;
+			} else {
+				if (nmeta > 1) {
+					node = subnode;
+					prev_i = i;
+					goto next;
+				}
+				/* append last prefix */
+				TKVDB_TRG_GET_NTH_REALLOC_KEY(key, pfx.size,
+					allocated);
+				memcpy((char *)(key->data) + key->size,
+					pfx.data, pfx.size);
+				key->size += pfx.size;
+
+				goto ok;
+			}
+		} else if ((s + nmeta) > (n + 1)) {
+			node = subnode;
+
+			TKVDB_TRG_GET_NTH_REALLOC_KEY(key, 1, allocated);
+			((char *)(key->data))[key->size] = i;
+			key->size += 1;
+
+			prev_i = i;
+			goto next;
+		}
+		s += nmeta;
+	}
+
+	if ((!val->data) || (val->data && (nmeta > 1))) {
+		TKVDB_TRG_GET_NTH_REALLOC_KEY(key, 1, allocated);
+		((char *)(key->data))[key->size] = prev_i;
+		key->size += 1;
+
+		s -= nmeta;
+		node = subnode;
+		goto next;
+	}
+ok:
+	if (prealloc) {
+		prealloc->size = allocated;
+		prealloc->data = key->data;
+	}
+	return TKVDB_OK;
+}
+#undef TKVDB_TRG_GET_NTH_REALLOC_KEY
 
 void
 test_triggers_nth(void)
@@ -814,6 +943,7 @@ test_triggers_nth(void)
 	TEST_CHECK(r == TKVDB_OK);
 
 	TEST_CHECK(tr->begin(tr) == TKVDB_OK);
+	/* fill transaction with unsorted kv-pairs */
 	for (i=0; i<N; i++) {
 		tkvdb_datum key, val;
 
@@ -825,16 +955,21 @@ test_triggers_nth(void)
 		TEST_CHECK(tr->putx(tr, &key, &val, trg) == TKVDB_OK);
 	}
 
-	{
-		tkvdb_datum pfx, val, meta;
-		uint64_t n;
-		void *node;
+	/* get all pairs by number */
+	for (i=0; i<N; i++) {
+		tkvdb_datum key, val, prealloc;
+		char databuf[KLEN];
 
-		r = tr->subnode(tr, NULL, 0, &node, &pfx, &val, &meta);
-		TEST_CHECK(r == TKVDB_OK);
-		n = *((uint64_t *)meta.data);
+		memset(databuf, 0, sizeof(databuf));
+		prealloc.size = sizeof(databuf);
+		prealloc.data = databuf;
 
-		TEST_CHECK(n == N);
+		r = tkvdb_get_nth(tr, i, &key, &val, &prealloc);
+
+		TEST_CHECK(val.size == kvs[i].vlen);
+		TEST_CHECK(key.size == kvs[i].klen);
+		TEST_CHECK(memcmp(key.data, kvs[i].key, key.size) == 0);
+		TEST_CHECK(memcmp(val.data, kvs[i].val, val.size) == 0);
 	}
 
 	TEST_CHECK(tr->rollback(tr) == TKVDB_OK);
