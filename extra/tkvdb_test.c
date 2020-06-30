@@ -796,6 +796,24 @@ trigger_nth(tkvdb_trigger_info *info)
 
 			break;
 
+		case TKVDB_TRIGGER_DELETE_ROOT:
+			break;
+
+		case TKVDB_TRIGGER_DELETE_PREFIX:
+			break;
+
+		case TKVDB_TRIGGER_DELETE_LEAF:
+			for (i=0; i<(info->stack->size - 1); i++) {
+				*((uint64_t *)info->stack->meta[i]) -= 1;
+			}
+			break;
+
+		case TKVDB_TRIGGER_DELETE_INTNODE:
+			for (i=0; i<info->stack->size; i++) {
+				*((uint64_t *)info->stack->meta[i]) -= 1;
+			}
+			break;
+
 		default:
 			break;
 	}
@@ -971,6 +989,33 @@ test_triggers_nth(void)
 		TEST_CHECK(memcmp(key.data, kvs[i].key, key.size) == 0);
 		TEST_CHECK(memcmp(val.data, kvs[i].val, val.size) == 0);
 	}
+
+	/* remove each 2-nd key-value pair */
+	for (i=0; i<N/2; i++) {
+		tkvdb_datum key;
+
+		key.data = kvs[i * 2].key;
+		key.size = kvs[i * 2].klen;
+
+		TEST_CHECK(tr->delx(tr, &key, 0, trg) == TKVDB_OK);
+	}
+
+	for (i=0; i<N/2; i++) {
+		tkvdb_datum key, val, prealloc;
+		char databuf[KLEN];
+
+		memset(databuf, 0, sizeof(databuf));
+		prealloc.size = sizeof(databuf);
+		prealloc.data = databuf;
+
+		r = tkvdb_get_nth(tr, i, &key, &val, &prealloc);
+
+		TEST_CHECK(val.size == kvs[i * 2 + 1].vlen);
+		TEST_CHECK(key.size == kvs[i * 2 + 1].klen);
+		TEST_CHECK(memcmp(key.data, kvs[i * 2 + 1].key, key.size) == 0);
+		TEST_CHECK(memcmp(val.data, kvs[i * 2 + 1].val, val.size) == 0);
+	}
+
 
 	TEST_CHECK(tr->rollback(tr) == TKVDB_OK);
 	tr->free(tr);

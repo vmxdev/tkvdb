@@ -94,6 +94,9 @@ struct tkvdb_tr
 		const tkvdb_datum *key, const tkvdb_datum *val,
 		tkvdb_triggers *triggers);
 
+	TKVDB_RES (*delx)(tkvdb_tr *tr, const tkvdb_datum *key, int del_pfx,
+		tkvdb_triggers *triggers);
+
 	TKVDB_RES (*subnode)(tkvdb_tr *tr, void *node, int n, void **subnode,
 		tkvdb_datum *prefix, tkvdb_datum *val, tkvdb_datum *meta);
 };
@@ -131,7 +134,11 @@ enum TKVDB_TRIGGER_MOD_TYPE
 	TKVDB_TRIGGER_INSERT_NEWNODE,
 	TKVDB_TRIGGER_INSERT_SHORTER,
 	TKVDB_TRIGGER_INSERT_LONGER,
-	TKVDB_TRIGGER_INSERT_SPLIT
+	TKVDB_TRIGGER_INSERT_SPLIT,
+	TKVDB_TRIGGER_DELETE_ROOT,
+	TKVDB_TRIGGER_DELETE_PREFIX,
+	TKVDB_TRIGGER_DELETE_LEAF,
+	TKVDB_TRIGGER_DELETE_INTNODE
 };
 
 typedef struct tkvdb_trigger_stack

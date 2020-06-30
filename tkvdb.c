@@ -628,6 +628,7 @@ tkvdb_writebuf_realloc(tkvdb *db, size_t new_size)
 	return TKVDB_OK;
 }
 
+
 /* generated implementation of tkvdb_* functions () */
 #include "tkvdb_generated.inc"
 
@@ -765,6 +766,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_alignval;
 
 			tr->putx = &tkvdb_put_alignvalx;
+			tr->delx = &tkvdb_del_alignvalx;
 			tr->subnode = &tkvdb_subnode_alignval;
 		} else {
 			/* RAM-only */
@@ -778,6 +780,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_alignval_nodb;
 
 			tr->putx = &tkvdb_put_alignval_nodbx;
+			tr->delx = &tkvdb_del_alignval_nodbx;
 			tr->subnode = &tkvdb_subnode_alignval_nodb;
 		}
 	} else {
@@ -792,6 +795,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_generic;
 
 			tr->putx = &tkvdb_put_genericx;
+			tr->delx = &tkvdb_del_genericx;
 			tr->subnode = &tkvdb_subnode_generic;
 		} else {
 			tr->commit = &tkvdb_commit_generic_nodb;
@@ -804,6 +808,7 @@ tkvdb_tr_create(tkvdb *db, tkvdb_params *user_params)
 			tr->free = &tkvdb_tr_free_generic_nodb;
 
 			tr->putx = &tkvdb_put_generic_nodbx;
+			tr->delx = &tkvdb_del_generic_nodbx;
 			tr->subnode = &tkvdb_subnode_generic_nodb;
 		}
 	}

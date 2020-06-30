@@ -1,7 +1,7 @@
 /*
  * tkvdb
  *
- * Copyright (c) 2016-2019, Vladimir Misyurov
+ * Copyright (c) 2016-2020, Vladimir Misyurov
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,15 +16,65 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "impl/trigger.h"
+
+#ifdef TKVDB_TRIGGER
+
+#define TKVDB_TRIGGERS_DELROOT(T)                                           \
+do {                                                                        \
+	T->info.type = TKVDB_TRIGGER_DELETE_ROOT;                           \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
+} while (0)
+
+#define TKVDB_TRIGGERS_DELPREFIX(T, P, N)                                   \
+do {                                                                        \
+	T->info.type = TKVDB_TRIGGER_DELETE_PREFIX;                         \
+	T->info.newroot = TKVDB_META_ADDR_NONLEAF(P);                             \
+	T->info.subnode1 = TKVDB_META_ADDR(N);                                    \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
+} while (0)
+
+#define TKVDB_TRIGGERS_DELINTNODE(T, P, N)                                  \
+do {                                                                        \
+	T->info.type = TKVDB_TRIGGER_DELETE_INTNODE;                        \
+	T->info.newroot = TKVDB_META_ADDR_NONLEAF(P);                             \
+	T->info.subnode1 = TKVDB_META_ADDR(N);                                    \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
+} while (0)
+
+#define TKVDB_TRIGGERS_DELLEAF(T, P, N)                                     \
+do {                                                                        \
+	T->info.type = TKVDB_TRIGGER_DELETE_LEAF;                           \
+	T->info.newroot = TKVDB_META_ADDR_NONLEAF(P);                             \
+	T->info.subnode1 = TKVDB_META_ADDR(N);                                    \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
+} while (0)
+
+#else
+
+#define TKVDB_TRIGGERS_DELROOT(T)
+#define TKVDB_TRIGGERS_DELPREFIX(T, P, N)
+#define TKVDB_TRIGGERS_DELINTNODE(T, P, N)
+#define TKVDB_TRIGGERS_DELLEAF(T, P, N)
+
+#endif
 
 static TKVDB_RES
+#ifdef TKVDB_TRIGGER
+TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
+	TKVDB_MEMNODE_TYPE *prev, int prev_off, int del_pfx,
+	tkvdb_triggers *triggers)
+#else
 TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 	TKVDB_MEMNODE_TYPE *prev, int prev_off, int del_pfx)
+#endif
 {
 	tkvdb_tr_data *tr = trns->data;
 
 	if (!prev) {
 		/* remove root node */
+		TKVDB_TRIGGERS_DELROOT(triggers);
+
 		TKVDB_IMPL_NODE_FREE(tr, node);
 		node = TKVDB_IMPL_NODE_NEW(trns, 0, 0, NULL, 0, NULL, 0, NULL);
 		if (!node) {
@@ -36,6 +86,8 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 	}
 
 	if (del_pfx) {
+		TKVDB_TRIGGERS_DELPREFIX(triggers, prev, node);
+
 		prev->next[prev_off] = NULL;
 #ifndef TKVDB_PARAMS_NODBFILE
 		prev->fnext[prev_off] = 0;
@@ -44,9 +96,13 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 		return TKVDB_OK;
 	} else if (node->c.type & TKVDB_NODE_VAL) {
 		if (node->c.nsubnodes != 0) {
+			TKVDB_TRIGGERS_DELINTNODE(triggers, prev, node);
+
 			/* we have subnodes, so just clear value bit */
 			node->c.type &= ~TKVDB_NODE_VAL;
 		} else {
+			TKVDB_TRIGGERS_DELLEAF(triggers, prev, node);
+
 			/* no subnodes, delete node */
 			prev->next[prev_off] = NULL;
 #ifndef TKVDB_PARAMS_NODBFILE
@@ -65,7 +121,12 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 }
 
 static TKVDB_RES
+#ifdef TKVDB_TRIGGER
+TKVDB_IMPL_DEL(tkvdb_tr *trns, const tkvdb_datum *key, int del_pfx,
+		tkvdb_triggers *triggers)
+#else
 TKVDB_IMPL_DEL(tkvdb_tr *trns, const tkvdb_datum *key, int del_pfx)
+#endif
 {
 	const unsigned char *sym;
 	TKVDB_MEMNODE_TYPE *node, *prev;
@@ -77,6 +138,11 @@ TKVDB_IMPL_DEL(tkvdb_tr *trns, const tkvdb_datum *key, int del_pfx)
 	if (!tr->started) {
 		return TKVDB_NOT_STARTED;
 	}
+
+#ifdef TKVDB_TRIGGER
+	/* resets triggers stack to initial state */
+	triggers->stack.size = 0;
+#endif
 
 	/* check root */
 	if (tr->root == NULL) {
@@ -108,14 +174,21 @@ next_node:
 		prefix_val_meta = node->prefix_val_meta;
 	}
 
+	TKVDB_TRIGGER_NODE_PUSH(triggers, node, prefix_val_meta);
+
 next_byte:
 
 	if (sym >= ((unsigned char *)key->data + key->size)) {
 		/* end of key */
 		if (pi == node->c.prefix_size) {
 			/* exact match */
+#ifdef TKVDB_TRIGGER
+			return TKVDB_IMPL_DO_DEL(trns, node, prev, prev_off,
+				del_pfx, triggers);
+#else
 			return TKVDB_IMPL_DO_DEL(trns, node, prev, prev_off,
 				del_pfx);
+#endif
 		}
 	}
 
@@ -163,4 +236,17 @@ next_byte:
 	return TKVDB_OK;
 }
 
+#undef TKVDB_TRIGGERS_DELROOT
+#undef TKVDB_TRIGGERS_DELPREFIX
+#undef TKVDB_TRIGGERS_DELINTNODE
+#undef TKVDB_TRIGGERS_DELLEAF
 
+#undef TKVDB_META_ADDR_LEAF
+#undef TKVDB_META_ADDR_NONLEAF
+#undef TKVDB_META_ADDR
+#undef TKVDB_INC_VOID_PTR
+#undef TKVDB_CALL_ALL_TRIGGER_FUNCTIONS
+
+#undef TKVDB_TRIGGER_NODE_PUSH
+
+#undef TKVDB_VAL_ALIGN_PAD

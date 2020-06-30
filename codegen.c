@@ -69,6 +69,7 @@ static const char *incs[] = {
 	NULL
 };
 
+
 static char *
 str2upper(const char *lower)
 {
@@ -119,13 +120,20 @@ print_block(const char *name, int dbfile)
 	printf("\n");
 	printf("#define TKVDB_TRIGGER\n");
 
-	func = "put";
-	func_upper = str2upper(func);
-	printf("#undef TKVDB_IMPL_%s\n", func_upper);
-	printf("#define TKVDB_IMPL_%s tkvdb_%s_%s%sx\n",
-		func_upper, func, name, dbfile ? "": "_nodb");
-	printf("#include \"impl/%s.c\"\n", func);
-	free(func_upper);
+	printf("#undef TKVDB_IMPL_PUT\n");
+	printf("#define TKVDB_IMPL_PUT tkvdb_put_%s%sx\n",
+		name, dbfile ? "": "_nodb");
+	printf("#include \"impl/put.c\"\n");
+
+	printf("#undef TKVDB_IMPL_DEL\n");
+	printf("#undef TKVDB_IMPL_DO_DEL\n");
+
+	printf("#define TKVDB_IMPL_DEL tkvdb_del_%s%sx\n",
+		name, dbfile ? "": "_nodb");
+	printf("#define TKVDB_IMPL_DO_DEL tkvdb_do_del_%s%sx\n",
+		name, dbfile ? "": "_nodb");
+
+	printf("#include \"impl/del.c\"\n");
 
 	printf("#undef TKVDB_TRIGGER\n");
 

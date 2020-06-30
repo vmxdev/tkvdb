@@ -16,121 +16,64 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifdef TKVDB_PARAMS_ALIGN_VAL
-#define VAL_ALIGN_PAD(NODE) (NODE->c.val_pad)
-#else
-#define VAL_ALIGN_PAD(NODE) 0
-#endif
-
+#include "impl/trigger.h"
 
 #ifdef TKVDB_TRIGGER
 
 #define TKVDB_TRIGGERS_META_SIZE(T) (T->meta_size)
 
-
-#define META_ADDR_LEAF(NODE)                                                \
-	((TKVDB_MEMNODE_TYPE_LEAF *)NODE)->prefix_val_meta                  \
-	+ NODE->c.prefix_size                                               \
-	+ VAL_ALIGN_PAD(NODE)                                               \
-	+ NODE->c.val_size
-
-#define META_ADDR_NONLEAF(NODE)                                             \
-	NODE->prefix_val_meta                                               \
-	+ NODE->c.prefix_size                                               \
-	+ VAL_ALIGN_PAD(NODE)                                               \
-	+ NODE->c.val_size
-
-#define META_ADDR(NODE)                                                     \
-	(NODE->c.type & TKVDB_NODE_LEAF)                                    \
-	? (META_ADDR_LEAF(NODE)) : (META_ADDR_NONLEAF(NODE))
-
-#define INC_VOID_PTR(P, I)                                                  \
-do {                                                                        \
-	char *tmp = P;                                                      \
-	tmp += I;                                                           \
-	P = tmp;                                                            \
-} while (0)
-
-#define ALL_FUNCTIONS(T)                                                    \
-do {                                                                        \
-	size_t trg_idx;                                                     \
-	for (trg_idx=0; trg_idx<T->n_funcs; trg_idx++) {                    \
-		size_t stack_idx;                                           \
-		T->info.userdata = T->funcs[trg_idx].userdata;              \
-		(*T->funcs[trg_idx].func)(&(T->info));                      \
-		for (stack_idx=0; stack_idx<T->stack.size; stack_idx++) {   \
-			INC_VOID_PTR(T->stack.meta[stack_idx],              \
-				T->funcs[trg_idx].meta_size);               \
-		}                                                           \
-		INC_VOID_PTR(T->info.newroot, T->funcs[trg_idx].meta_size); \
-		INC_VOID_PTR(T->info.subnode1, T->funcs[trg_idx].meta_size);\
-		INC_VOID_PTR(T->info.subnode2, T->funcs[trg_idx].meta_size);\
-	}                                                                   \
-} while (0)
-
-
 #define TKVDB_TRIGGERS_UPDATE(T)                                            \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_UPDATE;                                \
-	ALL_FUNCTIONS(T);                                                   \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
 } while (0)
 
 
 #define TKVDB_TRIGGERS_NEWROOT(T, N)                                        \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_INSERT_NEWROOT;                        \
-	T->info.newroot = META_ADDR_LEAF(N);                                \
-	ALL_FUNCTIONS(T);                                                   \
+	T->info.newroot = TKVDB_META_ADDR_LEAF(N);                          \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
 } while (0)
 
 #define TKVDB_TRIGGERS_SUBKEY(T, N)                                         \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_INSERT_SUBKEY;                         \
-	T->info.newroot = META_ADDR(N);                                     \
-	ALL_FUNCTIONS(T);                                                   \
+	T->info.newroot = TKVDB_META_ADDR(N);                               \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
 } while (0)
 
 #define TKVDB_TRIGGERS_SHORTER(T, N, R)                                     \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_INSERT_SHORTER;                        \
-	T->info.newroot = META_ADDR_NONLEAF(N);                             \
-	T->info.subnode1 = META_ADDR(R);                                    \
-	ALL_FUNCTIONS(T);                                                   \
+	T->info.newroot = TKVDB_META_ADDR_NONLEAF(N);                       \
+	T->info.subnode1 = TKVDB_META_ADDR(R);                              \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
 } while (0)
 
 #define TKVDB_TRIGGERS_LONGER(T, N, R)                                      \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_INSERT_LONGER;                         \
-	T->info.newroot = META_ADDR_NONLEAF(N);                             \
-	T->info.subnode1 = META_ADDR_LEAF(R);                               \
-	ALL_FUNCTIONS(T);                                                   \
+	T->info.newroot = TKVDB_META_ADDR_NONLEAF(N);                       \
+	T->info.subnode1 = TKVDB_META_ADDR_LEAF(R);                         \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
 } while (0)
 
 #define TKVDB_TRIGGERS_NEWNODE(T, N, R)                                     \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_INSERT_NEWNODE;                        \
-	T->info.newroot = META_ADDR_NONLEAF(N);                             \
-	T->info.subnode1 = META_ADDR(R);                                    \
-	ALL_FUNCTIONS(T);                                                   \
+	T->info.newroot = TKVDB_META_ADDR_NONLEAF(N);                       \
+	T->info.subnode1 = TKVDB_META_ADDR(R);                              \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
 } while (0)
 
 #define TKVDB_TRIGGERS_SPLIT(T, N, R1, R2)                                  \
 do {                                                                        \
 	T->info.type = TKVDB_TRIGGER_INSERT_SPLIT;                          \
-	T->info.newroot = META_ADDR_NONLEAF(N);                             \
-	T->info.subnode1 = META_ADDR(R1);                                   \
-	T->info.subnode2 = META_ADDR_LEAF(R2);                              \
-	ALL_FUNCTIONS(T);                                                   \
-} while (0)
-
-
-
-#define TKVDB_TRIGGER_NODE_PUSH(T, NODE, PVM)                               \
-do {                                                                        \
-	T->stack.meta[T->stack.size] = PVM                                  \
-		+ NODE->c.prefix_size + VAL_ALIGN_PAD(NODE)                 \
-		+ NODE->c.val_size;                                         \
-	T->stack.size++;                                                    \
+	T->info.newroot = TKVDB_META_ADDR_NONLEAF(N);                       \
+	T->info.subnode1 = TKVDB_META_ADDR(R1);                             \
+	T->info.subnode2 = TKVDB_META_ADDR_LEAF(R2);                        \
+	TKVDB_CALL_ALL_TRIGGER_FUNCTIONS(T);                                \
 } while (0)
 
 #else
@@ -144,8 +87,6 @@ do {                                                                        \
 #define TKVDB_TRIGGERS_LONGER(T, N, R)
 #define TKVDB_TRIGGERS_NEWNODE(T, N, R)
 #define TKVDB_TRIGGERS_SPLIT(T, N, R1, R2)
-
-#define TKVDB_TRIGGER_NODE_PUSH(T, NODE, PVM)
 
 #endif
 
@@ -252,7 +193,7 @@ next_byte:
 
 				memcpy(prefix_val_meta
 					+ node->c.prefix_size
-					+ VAL_ALIGN_PAD(node),
+					+ TKVDB_VAL_ALIGN_PAD(node),
 					val->data, val->size);
 				return TKVDB_OK;
 			}
@@ -265,7 +206,7 @@ next_byte:
 				val->size, val->data,
 				node->c.meta_size,
 				prefix_val_meta + node->c.prefix_size
-					+ VAL_ALIGN_PAD(node)
+					+ TKVDB_VAL_ALIGN_PAD(node)
 					+ node->c.val_size);
 			if (!newroot) return TKVDB_ENOMEM;
 
@@ -302,11 +243,12 @@ next_byte:
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + VAL_ALIGN_PAD(node)
+			prefix_val_meta + TKVDB_VAL_ALIGN_PAD(node)
 				+ node->c.prefix_size,
 			node->c.meta_size,
 			prefix_val_meta + node->c.prefix_size
-				+ VAL_ALIGN_PAD(node) + node->c.val_size);
+				+ TKVDB_VAL_ALIGN_PAD(node)
+				+ node->c.val_size);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);
@@ -345,11 +287,11 @@ next_byte:
 				prefix_val_meta,
 				node->c.val_size,
 				prefix_val_meta
-					+ VAL_ALIGN_PAD(node)
+					+ TKVDB_VAL_ALIGN_PAD(node)
 					+ node->c.prefix_size,
 				node->c.meta_size,
 				prefix_val_meta + node->c.prefix_size
-					+ VAL_ALIGN_PAD(node)
+					+ TKVDB_VAL_ALIGN_PAD(node)
 					+ node->c.val_size);
 			if (!newroot) {
 				if (tr->params.tr_buf_dynalloc) {
@@ -435,7 +377,8 @@ next_byte:
 			prefix_val_meta, 0, NULL,
 			node->c.meta_size,
 			prefix_val_meta + node->c.prefix_size
-				+ VAL_ALIGN_PAD(node) + node->c.val_size);
+				+ TKVDB_VAL_ALIGN_PAD(node)
+				+ node->c.val_size);
 		if (!newroot) return TKVDB_ENOMEM;
 
 		/* rest of prefix (skip current symbol) */
@@ -444,11 +387,12 @@ next_byte:
 			node->c.prefix_size - pi - 1,
 			prefix_val_meta + pi + 1,
 			node->c.val_size,
-			prefix_val_meta + VAL_ALIGN_PAD(node)
+			prefix_val_meta + TKVDB_VAL_ALIGN_PAD(node)
 				+ node->c.prefix_size,
 			node->c.meta_size,
 			prefix_val_meta + node->c.prefix_size
-				+ VAL_ALIGN_PAD(node) + node->c.val_size);
+				+ TKVDB_VAL_ALIGN_PAD(node)
+				+ node->c.val_size);
 		if (!subnode_rest) {
 			if (tr->params.tr_buf_dynalloc) {
 				free(newroot);
@@ -505,10 +449,10 @@ next_byte:
 #undef TKVDB_TRIGGERS_NEWNODE
 #undef TKVDB_TRIGGERS_SPLIT
 
-#undef META_ADDR_LEAF
-#undef META_ADDR_NONLEAF
-#undef META_ADDR
-#undef INC_VOID_PTR
-#undef ALL_FUNCTIONS
+#undef TKVDB_META_ADDR_LEAF
+#undef TKVDB_META_ADDR_NONLEAF
+#undef TKVDB_META_ADDR
+#undef TKVDB_INC_VOID_PTR
+#undef TKVDB_CALL_ALL_TRIGGER_FUNCTIONS
 
-#undef VAL_ALIGN_PAD
+#undef TKVDB_VAL_ALIGN_PAD
