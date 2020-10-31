@@ -427,6 +427,7 @@ next_node:
 	}
 
 next_byte:
+
 	if (sym >= ((uint8_t *)key->data + key->size)) {
 		/* end of key */
 		if ((pi == node->c.prefix_size)
@@ -451,14 +452,12 @@ next_byte:
 		return TKVDB_OK;
 	}
 
+
 	if (pi >= node->c.prefix_size) {
 		/* end of prefix (but not the key) */
 		next = NULL;
 		TKVDB_SUBNODE_NEXT(c->tr, node, next, *sym);
 		if (next) {
-			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND(cr,
-				prefix_val_meta, node->c.prefix_size) );
-
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND_SYM(cr, *sym) );
 			TKVDB_EXEC ( TKVDB_IMPL_CURSOR_PUSH(cr, node, *sym) );
 
@@ -550,7 +549,7 @@ next_byte:
 		}
 	}
 
-	if ((seek == TKVDB_SEEK_LE) && !(node->c.type & TKVDB_NODE_VAL)) {
+	if (!(node->c.type & TKVDB_NODE_VAL)) {
 		TKVDB_EXEC ( TKVDB_IMPL_CURSOR_APPEND_SYM(cr, *sym) );
 	}
 
