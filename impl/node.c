@@ -374,8 +374,12 @@ TKVDB_IMPL_NODE_READ(tkvdb_tr *trns,
 			memcpy(prefix_val_meta, ptr, blk_tail);
 
 			/* read rest of prefix */
-			read(fd, prefix_val_meta + blk_tail,
-				pfx_size - blk_tail);
+			if (!tkvdb_try_read_file(fd,
+				prefix_val_meta + blk_tail,
+				pfx_size - blk_tail, 0)) {
+
+				return TKVDB_IO_ERROR;
+			}
 
 			/* read value + metadata */
 			(*node_ptr)->c.val_pad = VALPADDING((*node_ptr));
