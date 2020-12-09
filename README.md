@@ -91,6 +91,18 @@ while (rc == TKVDB_OK) {
 cursor->free(cursor);
 ```
 
+`while` loop can be written in alternative way
+
+```
+while (rc == TKVDB_OK) {
+	tkvdb_datum key = cursor->key_datum(cursor);
+	tkvdb_datum value = cursor->val_datum(cursor);
+
+	rc = cursor->next(cursor);
+}
+```
+
+
 To iterate in reverse order use `cursor->last()` and `cursor->prev()`.
 
 If you want to search a key-value pair in database by prefix use `cursor->seek(cursor, &key, TKVDB_SEEK)`

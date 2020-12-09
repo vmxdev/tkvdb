@@ -554,6 +554,30 @@ tkvdb_cursor_valsize(tkvdb_cursor *c)
 	return cdata->val_size;
 }
 
+static tkvdb_datum
+tkvdb_cursor_key_datum(tkvdb_cursor *c)
+{
+	tkvdb_datum dat;
+	tkvdb_cursor_data *cdata = c->data;
+
+	dat.data = cdata->prefix;
+	dat.size = cdata->prefix_size;
+
+	return dat;
+}
+
+static tkvdb_datum
+tkvdb_cursor_val_datum(tkvdb_cursor *c)
+{
+	tkvdb_datum dat;
+	tkvdb_cursor_data *cdata = c->data;
+
+	dat.data = cdata->val;
+	dat.size = cdata->val_size;
+
+	return dat;
+}
+
 static int
 tkvdb_cursor_resize_prefix(tkvdb_cursor *c, size_t n, int grow)
 {
@@ -894,6 +918,9 @@ tkvdb_cursor_create(tkvdb_tr *tr)
 
 	c->val = &tkvdb_cursor_val;
 	c->valsize = &tkvdb_cursor_valsize;
+
+	c->key_datum = &tkvdb_cursor_key_datum;
+	c->val_datum = &tkvdb_cursor_val_datum;
 
 	c->free = &tkvdb_cursor_free;
 

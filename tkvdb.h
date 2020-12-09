@@ -110,6 +110,10 @@ struct tkvdb_cursor
 	void *(*val)(tkvdb_cursor *c);
 	size_t (*valsize)(tkvdb_cursor *c);
 
+	/* alternate way to get key/value */
+	tkvdb_datum (*key_datum)(tkvdb_cursor *c);
+	tkvdb_datum (*val_datum)(tkvdb_cursor *c);
+
 	TKVDB_RES (*seek)(tkvdb_cursor *c,
 		const tkvdb_datum *key, TKVDB_SEEK seek);
 	TKVDB_RES (*first)(tkvdb_cursor *c);
@@ -119,6 +123,7 @@ struct tkvdb_cursor
 	TKVDB_RES (*prev)(tkvdb_cursor *c);
 
 	void (*free)(tkvdb_cursor *c);
+
 
 	void *data;
 };
