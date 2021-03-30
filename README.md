@@ -22,6 +22,10 @@ There is no limitations for 32-bit CPU's, except for size of memory buffers.
 
 `tkvdb` was tested on Linux(x32/x64 CPU's and 32 bit ARM) and under Wine using mingw (hopefully it will work under Windows).
 
+## Python binding
+
+Thanks to @vladimir-g, there is a python binding for `tkvdb`, see https://github.com/vladimir-g/python-tkvdb
+
 ## Basic usage
 
 API is quite a simple, but requires some explanation.

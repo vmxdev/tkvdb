@@ -180,8 +180,8 @@ next_byte:
 
 	if (sym >= ((unsigned char *)key->data + key->size)) {
 		/* end of key */
-		if (pi == node->c.prefix_size) {
-			/* exact match */
+		if ((pi == node->c.prefix_size) || (del_pfx)) {
+			/* exact match or we should delete by prefix */
 #ifdef TKVDB_TRIGGER
 			return TKVDB_IMPL_DO_DEL(trns, node, prev, prev_off,
 				del_pfx, triggers);
