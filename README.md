@@ -24,7 +24,7 @@ There is no limitations for 32-bit CPU's, except for size of memory buffers.
 
 ## Python binding
 
-Thanks to @vladimir-g, there is a python binding for `tkvdb`, see https://github.com/vladimir-g/python-tkvdb
+Thanks to [@vladimir-g](https://github.com/vladimir-g), there is a python binding for `tkvdb`, see https://github.com/vladimir-g/python-tkvdb
 
 ## Basic usage
 
