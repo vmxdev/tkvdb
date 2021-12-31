@@ -1,7 +1,7 @@
 /*
  * tkvdb
  *
- * Copyright (c) 2016-2020, Vladimir Misyurov
+ * Copyright (c) 2016-2021, Vladimir Misyurov
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -92,15 +92,12 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 #ifndef TKVDB_PARAMS_NODBFILE
 		prev->fnext[prev_off] = 0;
 #endif
+		prev->c.nsubnodes -= 1;
+
 		TKVDB_IMPL_NODE_FREE(tr, node);
 		return TKVDB_OK;
 	} else if (node->c.type & TKVDB_NODE_VAL) {
-		if (node->c.nsubnodes != 0) {
-			TKVDB_TRIGGERS_DELINTNODE(triggers, prev, node);
-
-			/* we have subnodes, so just clear value bit */
-			node->c.type &= ~TKVDB_NODE_VAL;
-		} else {
+		if (node->c.nsubnodes == 0) {
 			TKVDB_TRIGGERS_DELLEAF(triggers, prev, node);
 
 			/* no subnodes, delete node */
@@ -108,10 +105,15 @@ TKVDB_IMPL_DO_DEL(tkvdb_tr *trns, TKVDB_MEMNODE_TYPE *node,
 #ifndef TKVDB_PARAMS_NODBFILE
 			prev->fnext[prev_off] = 0;
 #endif
-
 			prev->c.nsubnodes -= 1; /* XXX: not atomic */
 
 			TKVDB_IMPL_NODE_FREE(tr, node);
+		} else if (node->c.nsubnodes == 1) {
+			/*   */
+		} else {
+			TKVDB_TRIGGERS_DELINTNODE(triggers, prev, node);
+
+			node->c.type &= ~TKVDB_NODE_VAL;
 		}
 	} else {
 		return TKVDB_NOT_FOUND;
